@@ -25,15 +25,15 @@ class EncoderViT(nn.Module):
     def __init__(self, args):
         super().__init__()
 
-        # This is ViT-S settings
+        # This is ViT-Ti settings
         self.regressor = ViT(
                     image_size=int(args.img_dim),
                     patch_size=16,
                     num_classes=1000,
-                    dim=384,
+                    dim=192,
                     depth=12,
-                    heads=6,
-                    mlp_dim=1536,
+                    heads=3,
+                    mlp_dim=768,
                     dropout=0.1,
                     emb_dropout=0.1
                 )       
@@ -54,39 +54,43 @@ class RegressorViT(nn.Module):
         self.relu = nn.ReLU()
 
         self.fc1 = nn.Linear(1000, 512)
-        self.fc2 = nn.Linear(512, 256)
-        self.fc3 = nn.Linear(256, 1)        
+        self.fc2 = nn.Linear(512, 1)
 
     def forward(self, x):
         x = self.relu(self.fc1(x))
-        x = self.relu(self.fc2(x))
-        sa = self.fc3(x)
+        sa = self.fc2(x)
 
         return sa
 
 class DecoderViT(nn.Module):
-    def __init__(self, args, in_dim=1000):
+    def __init__(self, args, in_dim=1000, out_dim=64*5*13):
         super().__init__()
 
+        self.args = args
         self.img_dim = int(args.img_dim)
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
 
-        self.decFC1 = nn.Linear(in_dim, 256)
-        self.decFC2 = nn.Linear(256, 512)
-        self.decFC3 = nn.Linear(512, 1024)
-        self.decFC4 = nn.Linear(1024, (3 * self.img_dim * self.img_dim))
+        self.decFC1 = nn.Linear(in_dim, out_dim)
+        self.decConv2 = nn.ConvTranspose2d(64, 32, 3, stride=2, padding=1)
+        self.decConv3 = nn.ConvTranspose2d(32, 16, 3, stride=2, padding=1)
+        self.decConv4 = nn.ConvTranspose2d(16, 8, 3, stride=2, padding=(1,0))
+        self.decConv5 = nn.ConvTranspose2d(8, 3, 3, stride=2, padding=(1,0), output_padding=1)
+        self.decFC2 = nn.Linear(3*66*200, (3*self.img_dim*self.img_dim))
     
     def forward(self, x):
         x = self.relu(self.decFC1(x))
         
-        # x = x.view(-1, 64, 4, 4)
+        x = x.reshape(-1, 64, 5, 13)
 
-        x = self.relu((self.decFC2(x)))
-        x = self.relu((self.decFC3(x)))
-        x = self.sigmoid((self.decFC4(x)))    
+        x = self.relu((self.decConv2(x)))
+        x = self.relu((self.decConv3(x)))
+        x = self.relu((self.decConv4(x)))     
+        x = self.sigmoid((self.decConv5(x)))
 
-        x = x.view(-1, 3, self.img_dim, self.img_dim) 
-        # print(x.shape)
+        x = x.reshape(x.shape[0], -1)
+        x = self.decFC2(x)
+
+        x = x.reshape(x.shape[0], 3, self.img_dim, self.img_dim)
 
         return x
