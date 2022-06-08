@@ -74,7 +74,7 @@ def main(args):
         pl = PipelineJoint(args) # Training the AE on the batch method, but testing on the original pipeline b/c it's the same testing pipeline
         pl.train()
 
-    if args.run_mode == "test_ours":
+    if args.run_mode == "test_autojoin":
         aug_list = get_aug_list('./aug_list_all.txt')   
 
         # Testing on the benchmark datasets: single, clean, combined, & unseen
@@ -111,9 +111,9 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", default="honda")
     parser.add_argument("--model", default="resnet")
     parser.add_argument("--load", default="false")
-    parser.add_argument("--run_mode", default="train", choices=["train", "test_ours", "test_others"])
+    parser.add_argument("--run_mode", default="train", choices=["train", "test_autojoin", "test_others"])
     parser.add_argument("--img_dim", type=int, default=None)
-    parser.add_argument("--lambda1", type=int, default=10)
-    parser.add_argument("--lambda2", type=int, default=1)
+    parser.add_argument("--lambda1", type=int, default=1)
+    parser.add_argument("--lambda2", type=int, default=10)
 
     main(parser.parse_args())

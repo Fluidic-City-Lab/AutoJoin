@@ -27,7 +27,7 @@ class TrainDriveDataset(Dataset):
                 [T.ToTensor()]
             )
 
-        self.curriculum_max = 1
+        self.curriculum_max = 0
 
     def __len__(self):
         return len(self.y)

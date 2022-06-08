@@ -15,11 +15,11 @@ import numpy as np
 from models.joint_vit import DecoderViT, EncoderViT, RegressorViT
 
 
-from utils.data_utils import TrainDriveDataset, TestDriveDataset, prepare_data_test
-from utils.generate_augs import generate_augmentations_batch, generate_augmentations_test
+from utils.data_utils import TrainDriveDataset, TestDriveDataset
+from utils.generate_augs import generate_augmentations_batch
 from utils.error_metrics import mae, ma, rmse
 
-from models.joint_resnet50 import RN50Encoder, RN50Head, RN50Decoder
+from models.joint_resnet50 import EncoderRN50, DecoderRN50, RegressorRN50
 from models.joint_nvidia import EncoderNvidia, DecoderNvidia, RegressorNvidia
 from models.nvidia import Nvidia
 from models.resnet50 import ResNet50
@@ -103,9 +103,9 @@ class PipelineJoint:
             
 
             if self.args.model == "resnet":
-                self.encoder = RN50Encoder([3, 4, 6, 3], 3, 1).to(self.device)
-                self.regressor = RN50Head([3, 4, 6, 3], 3, 1).to(self.device)
-                self.decoder = RN50Decoder().to(self.device)
+                self.encoder = EncoderRN50([3, 4, 6, 3], 3, 1).to(self.device)
+                self.regressor = RegressorRN50([3, 4, 6, 3], 3, 1).to(self.device)
+                self.decoder = DecoderRN50().to(self.device)
 
             elif self.args.model == "nvidia":                
                 self.encoder = EncoderNvidia().to(self.device)
@@ -161,8 +161,6 @@ class PipelineJoint:
             self.test_perturb = test_perturb
             self.test_num = test_num
 
-            print(f"test perturb: {self.test_perturb}")
-            print(f"test num: {self.test_num}")
             # if test_num < 75: # This corresponds to the single perturbations where we just want to load the clean dataset
             #     self.test_inputs, self.test_targets, self.test_angles = prepare_data_test(self.args.data_dir, "clean")
             #     self.test_dataset = TestDriveDataset(self.test_inputs, self.test_targets, self.test_angles)
@@ -303,9 +301,9 @@ class PipelineJoint:
                 with open(f'{self.args.logs_dir}/train_log_pp.txt', 'a') as train_log_pp:
                     train_log_pp.write("Saving new model\n")
 
-                torch.save(self.encoder, f'{self.args.logs_dir}/{self.args.trained_models_dir}/encoder.pt')
-                torch.save(self.decoder, f'{self.args.logs_dir}/{self.args.trained_models_dir}/decoder.pt')
-                torch.save(self.regressor, f'{self.args.logs_dir}/{self.args.trained_models_dir}/regressor.pt')
+                torch.save(self.encoder.state_dict(), f'{self.args.logs_dir}/{self.args.trained_models_dir}/encoder.pth')
+                torch.save(self.decoder.state_dict(), f'{self.args.logs_dir}/{self.args.trained_models_dir}/decoder.pth')
+                torch.save(self.regressor.state_dict(), f'{self.args.logs_dir}/{self.args.trained_models_dir}/regressor.pth')
 
                 torch.save({
                     "encoder_state_dict": self.encoder.state_dict(),
@@ -424,8 +422,11 @@ class PipelineJoint:
         return (avg_val_batch_loss, avg_val_batch_recon_loss, avg_val_batch_reg_loss, ma_val)
 
     def test_other(self):
-        other_method = Nvidia().to(self.device)
-        other_method.load_state_dict(torch.load('./saved_models/standard1.pth'))
+        # other_method = Nvidia().to(self.device)
+        # other_method.load_state_dict(torch.load('./saved_models/standard1.pth'))
+        # other_method.eval()
+
+        other_method = torch.load('./saved_models/shen1.pt')
         other_method.eval()
 
         print("Started Testing")
@@ -438,7 +439,7 @@ class PipelineJoint:
                 img_batch, angle_batch = data
                 img_batch, angle_batch = img_batch.to(self.device), angle_batch.to(self.device)
     
-                output = other_method(img_batch)
+                output, _ = other_method(img_batch)
                 preds_test.append(np.squeeze(output.cpu().detach().clone().numpy()))
 
                 gt_test.append(np.squeeze(angle_batch.cpu().detach().clone().numpy()))
@@ -452,7 +453,7 @@ class PipelineJoint:
         metric_list = [ma, rmse, mae]
 
         # Model 1
-        calc_metrics(metric_list, results, "standard1", preds_test, gt_test)
+        calc_metrics(metric_list, results, "shen1", preds_test, gt_test)
 
         print("Writing Results to Logs")
         if self.test_num < 117:
@@ -467,10 +468,20 @@ class PipelineJoint:
         print("Finished Writing Results to Logs\n") 
 
     def test_our_approach(self):
-        encoder = torch.load('./results/trained_models/encoder.pt')
+        if self.args.model == "resnet":
+            encoder = EncoderRN50().to(self.device)
+            regressor = RegressorRN50().to(self.device)
+        elif self.args.model == "nvidia":
+            encoder = EncoderNvidia().to(self.device)
+            regressor = RegressorNvidia().to(self.device)
+        elif self.argsmodel == "vit":
+            encoder = EncoderViT().to(self.device)
+            regressor = RegressorViT().to(self.device)
+
+        encoder.load_state_dict(torch.load('./results/trained_models/encoder.pth'))
         encoder.eval()
 
-        regressor = torch.load('./results/trained_models/regressor.pt')
+        regressor.load_state_dict(torch.load('./results/trained_models/regressor.pth'))
         regressor.eval()
 
         print("Started Testing")
@@ -486,7 +497,6 @@ class PipelineJoint:
                 output = torch.squeeze(regressor(encoder(img_batch)))
             
                 preds_test.append(output.cpu().detach().clone().numpy())
-                
                 gt_test.append(np.squeeze(angle_batch.cpu().detach().clone().numpy()))
 
                 # fig, ax = plt.subplots(3,1, figsize=(8,8), dpi=100)

@@ -52,9 +52,9 @@ class block(nn.Module):
         x = self.relu(x)
         return x
 
-class RN50Encoder(nn.Module):
+class EncoderRN50(nn.Module):
     def __init__(self, layers, image_channels, num_classes, block=block):
-        super(RN50Encoder, self).__init__()
+        super(EncoderRN50, self).__init__()
         self.in_channels = 64
         self.conv1 = nn.Conv2d(image_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
@@ -119,7 +119,7 @@ class RN50Encoder(nn.Module):
 
         return nn.Sequential(*layers)
 
-class RN50Head(nn.Module):
+class RegressorRN50(nn.Module):
     def __init__(self, layers, image_channels, num_classes, block=block):
         super(RN50Head, self).__init__()
         self.in_channels = 512
@@ -158,7 +158,7 @@ class RN50Head(nn.Module):
 
         return nn.Sequential(*layers)
 
-class RN50Decoder(nn.Module):
+class DecoderRN50(nn.Module):
     def __init__(self, in_dim=2048, out_dim=64*5*13):
         super().__init__()
 
