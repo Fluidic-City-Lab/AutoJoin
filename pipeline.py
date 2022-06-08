@@ -56,6 +56,9 @@ class PipelineJoint:
             self.lr = self.args.lr
             self.train_epochs = self.args.train_epochs
 
+            self.lambda1 = self.args.lambda1
+            self.lambda2 = self.args.lambda2
+
             print(f"HYPERPARAMETERS\n------------------------")
             print(f"Train batch_size: {self.batch_size}")
             print(f"Learning rate: {self.lr}")
@@ -250,15 +253,15 @@ class PipelineJoint:
                 recon_loss = self.recon_loss(recon_batch, clean_batch)
                 regr_loss = self.regr_loss(sa_batch, angle_batch)
 
-                loss = (recon_loss) + (10 * regr_loss) 
+                loss = (self.lambda1 * recon_loss) + (self.lambda2 * regr_loss) 
 
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
 
                 train_batch_loss += loss.item()
-                train_batch_recon_loss += (1 * recon_loss.item())
-                train_batch_reg_loss += (10 * regr_loss.item())
+                train_batch_recon_loss += (self.lambda1 * recon_loss.item())
+                train_batch_reg_loss += (self.lambda2 * regr_loss.item())
 
                 preds_train.extend(sa_batch.cpu().detach().numpy())
             
@@ -365,15 +368,6 @@ class PipelineJoint:
         fig, ax = plt.subplots(figsize=(16,5), dpi=200)
         xticks= np.arange(0,self.train_epochs,5)
         ax.set_ylabel("Avg. Loss") 
-        ax.plot(np.array(self.train_emb_loss_collector))
-        ax.plot(np.array(self.val_emb_loss_collector))
-        ax.set_xticks(xticks) 
-        ax.legend(["Training (MSE)", "Validation (MSE)"])
-        fig.savefig(f'{self.args.logs_dir}/training_graph_emb.png')
-
-        fig, ax = plt.subplots(figsize=(16,5), dpi=200)
-        xticks= np.arange(0,self.train_epochs,5)
-        ax.set_ylabel("Avg. Loss") 
         ax.plot(np.array(self.train_reg_loss_collector))
         ax.plot(np.array(self.val_reg_loss_collector))
         ax.set_xticks(xticks) 
@@ -399,7 +393,6 @@ class PipelineJoint:
                 clean_batch, angle_batch = data
                 gt_val.extend(angle_batch.numpy())
 
-                # clean_batch = torch.tensor(clean_batch, dtype=torch.float32)   
                 angle_batch = torch.unsqueeze(angle_batch, 1)     
 
                 clean_batch, angle_batch = clean_batch.to(self.device), angle_batch.to(self.device)
@@ -413,11 +406,11 @@ class PipelineJoint:
                 recon_loss = self.recon_loss(recon_batch, clean_batch)
                 regr_loss = self.regr_loss(sa_batch, angle_batch)
 
-                loss = (recon_loss)  + (10 * regr_loss)
+                loss = (self.lambda1 * recon_loss)  + (self.lambda2 * regr_loss)
 
                 val_batch_loss += loss.item()
-                val_batch_recon_loss += recon_loss.item()
-                val_batch_reg_loss += (10 * regr_loss.item())
+                val_batch_recon_loss += (self.lambda1 * recon_loss.item())
+                val_batch_reg_loss += (self.lambda2 * regr_loss.item())
 
                 preds_val.extend(sa_batch.cpu().detach().numpy())
 
