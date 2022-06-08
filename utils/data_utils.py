@@ -39,21 +39,20 @@ class DriveDataset(Dataset):
 class DriveDatasetImage(Dataset):
     def __init__(self, args, x, y):
         self.args = args
-        img_dim = int(args.img_dim)
+        
         self.x = x # names of images
         self.y = y # steering angles of images
 
-        # self.transform = transforms.Compose(
-        #     [transforms.Resize((img_dim,img_dim)) ,
-        #     transforms.ToTensor()]
-        # )
-
-        self.transform = T.Compose([
-            T.Resize(256, interpolation=3),
-            T.CenterCrop(img_dim),
-            T.ToTensor(),
-            T.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD),
-])
+        if self.args.img_dim:
+            img_dim = int(args.img_dim)
+            self.transform = T.Compose(
+                [T.Resize((img_dim,img_dim)) ,
+                T.ToTensor()]
+            )
+        else:
+            self.transform = T.Compose(
+                [T.ToTensor()]
+            )
 
         self.curriculum_max = 1
 
@@ -97,6 +96,9 @@ class TestDriveDataset(Dataset):
         x = x / 255.0
 
         return x
+    
+    def perturb(self, x):
+        
 
     def __len__(self):
         return len(self.image_list)

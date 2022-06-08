@@ -28,7 +28,7 @@ from vit_pytorch import ViT
 from PIL import Image
 
 class PipelineJoint:
-    def __init__(self, args, aug_method="noise_3", mode="train", aug_num=0):
+    def __init__(self, args, mode="train", aug_method="noise_3", aug_num=0):
         self.args = args
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print("Using device: {}".format(self.device))
@@ -38,28 +38,30 @@ class PipelineJoint:
         np.random.seed(self.args.seed)
         torch.manual_seed(self.args.seed)
 
-        self.batch_size = self.args.batch_size
-        self.lr = self.args.lr
-        self.train_epochs = self.args.train_epochs
+        results_dir = os.path.join(self.args.logs_dir)
+        if not os.path.exists(results_dir):
+            os.mkdir(results_dir)
+        
+        checkpoints_dir = os.path.join(self.args.logs_dir, self.args.checkpoints_dir)
+        if not os.path.exists(checkpoints_dir):
+            os.mkdir(checkpoints_dir)
+        
+        trained_models_dir = os.path.join(self.args.logs_dir, self.args.trained_models_dir)
+        if not os.path.exists(trained_models_dir):
+            os.mkdir(trained_models_dir)
+
 
         if mode == "train":
+            self.batch_size = self.args.batch_size
+            self.lr = self.args.lr
+            self.train_epochs = self.args.train_epochs
+
             print(f"HYPERPARAMETERS\n------------------------")
             print(f"Train batch_size: {self.batch_size}")
             print(f"Learning rate: {self.lr}")
             print(f"Training Epochs: {self.train_epochs}\n")
 
-            results_dir = os.path.join(self.args.logs_dir)
-            if not os.path.exists(results_dir):
-                os.mkdir(results_dir)
             
-            checkpoints_dir = os.path.join(self.args.logs_dir, self.args.checkpoints_dir)
-            if not os.path.exists(checkpoints_dir):
-                os.mkdir(checkpoints_dir)
-            
-            trained_models_dir = os.path.join(self.args.logs_dir, self.args.trained_models_dir)
-            if not os.path.exists(trained_models_dir):
-                os.mkdir(trained_models_dir)
-
             # This is for loading the data from image files (like png/jpg/etc.)
             label_path_train = os.path.join(self.args.data_dir, f"{self.args.dataset}", "labels_train.csv")
 
@@ -75,7 +77,6 @@ class PipelineJoint:
         
             x = np.array(x)
             y = np.array(y)
-            # print(csv_train)
 
             x_train, x_val, y_train, y_val = train_test_split(x, y, test_size=0.1, random_state=42)
 
@@ -148,19 +149,13 @@ class PipelineJoint:
 
                 self.train_loss_collector = checkpoint["train_loss_collector"]
                 self.train_recon_loss_collector = checkpoint["train_recon_loss_collector"]
-                self.train_emb_loss_collector = checkpoint["train_emb_loss_collector"]
                 self.train_reg_loss_collector = checkpoint["train_reg_loss_collector"]
 
                 self.val_loss_collector = checkpoint["val_loss_collector"]
                 self.val_recon_loss_collector = checkpoint["val_recon_loss_collector"]
-                self.val_emb_loss_collector = checkpoint["val_emb_loss_collector"]
                 self.val_reg_loss_collector = checkpoint["val_reg_loss_collector"]
 
         else:
-            results_dir = os.path.join(self.args.logs_dir)
-            if not os.path.exists(results_dir):
-                os.mkdir(results_dir)
-
             if aug_num < 75: # This corresponds to the single perturbations where we just want to load the clean dataset
                 self.test_inputs, self.test_targets, self.test_angles = prepare_data_test(self.args.data_dir, "clean")
                 self.test_dataset = TestDriveDataset(self.test_inputs, self.test_targets, self.test_angles)
@@ -198,10 +193,10 @@ class PipelineJoint:
 
             train_batch_loss = 0
             train_batch_recon_loss = 0
-            train_batch_emb_loss = 0
             train_batch_reg_loss = 0
 
-            gt_train = []
+            # Below two arrays are used for calculing Mean Accuracy during training
+            gt_train = [] 
             preds_train = []
 
             for bi, data in enumerate(tqdm(self.train_dataloader)):

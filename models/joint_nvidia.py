@@ -12,7 +12,6 @@ class EncoderNvidia(nn.Module):
         self.conv4 = nn.Conv2d(48, 64, 3)
         self.conv5 = nn.Conv2d(64, 64, 3)
         
-       
         # self.fc1 = nn.Linear(64 * 1 * 18, 100) # When images are 66 x 200
         # self.fc1 = nn.Linear(64 * 1 * 1, 100) # When images are 64 x 64
         self.fc1 = nn.Linear(64 * 9 * 9, 100) # When images are 128 x 128
