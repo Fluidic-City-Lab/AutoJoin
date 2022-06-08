@@ -15,7 +15,7 @@ import numpy as np
 from models.joint_vit import DecoderViT, EncoderViT, RegressorViT
 
 
-from utils.data_utils import DriveDataset, DriveDatasetImage, TestDriveDataset, prepare_data_test
+from utils.data_utils import TrainDriveDataset, TestDriveDataset, prepare_data_test
 from utils.generate_augs import generate_augmentations_batch, generate_augmentations_test
 from utils.error_metrics import mae, ma, rmse
 
@@ -28,7 +28,7 @@ from vit_pytorch import ViT
 from PIL import Image
 
 class PipelineJoint:
-    def __init__(self, args, mode="train", aug_method="noise_3", aug_num=0):
+    def __init__(self, args, mode="train", test_perturb="noise_3", test_num=0):
         self.args = args
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         print("Using device: {}".format(self.device))
@@ -80,8 +80,8 @@ class PipelineJoint:
 
             x_train, x_val, y_train, y_val = train_test_split(x, y, test_size=0.1, random_state=42)
 
-            self.train_dataset = DriveDatasetImage(args, x_train, y_train)
-            self.val_dataset = DriveDatasetImage(args, x_val, y_val)
+            self.train_dataset = TrainDriveDataset(args, x_train, y_train)
+            self.val_dataset = TrainDriveDataset(args, x_val, y_val)
             
             self.train_dataloader = DataLoader(dataset=self.train_dataset,
                                                 batch_size=self.batch_size,
@@ -119,7 +119,6 @@ class PipelineJoint:
 
             self.recon_loss = nn.MSELoss()
             self.regr_loss = nn.L1Loss()
-            self.emb_loss = nn.MSELoss()                                  
         
             self.params = list(self.encoder.parameters()) + list(self.regressor.parameters()) + list(self.decoder.parameters())
             self.optimizer = torch.optim.Adam(self.params, lr=self.lr)
@@ -156,12 +155,35 @@ class PipelineJoint:
                 self.val_reg_loss_collector = checkpoint["val_reg_loss_collector"]
 
         else:
-            if aug_num < 75: # This corresponds to the single perturbations where we just want to load the clean dataset
-                self.test_inputs, self.test_targets, self.test_angles = prepare_data_test(self.args.data_dir, "clean")
-                self.test_dataset = TestDriveDataset(self.test_inputs, self.test_targets, self.test_angles)
-            else: # This corresponds to the other 3 benchmarking datasets
-                self.test_inputs, self.test_targets, self.test_angles = prepare_data_test(self.args.data_dir, aug_method)
-                self.test_dataset = TestDriveDataset(self.test_inputs, self.test_targets, self.test_angles)
+            self.test_perturb = test_perturb
+            self.test_num = test_num
+
+            print(f"test perturb: {self.test_perturb}")
+            print(f"test num: {self.test_num}")
+            # if test_num < 75: # This corresponds to the single perturbations where we just want to load the clean dataset
+            #     self.test_inputs, self.test_targets, self.test_angles = prepare_data_test(self.args.data_dir, "clean")
+            #     self.test_dataset = TestDriveDataset(self.test_inputs, self.test_targets, self.test_angles)
+            # else: # This corresponds to the other 3 benchmarking datasets
+            #     self.test_inputs, self.test_targets, self.test_angles = prepare_data_test(self.args.data_dir, aug_method)
+            #     self.test_dataset = TestDriveDataset(self.test_inputs, self.test_targets, self.test_angles)
+
+            # This is for loading the data from image files (like png/jpg/etc.)
+            label_path_test = os.path.join(self.args.data_dir, f"{self.args.dataset}", "labels_test.csv")
+
+            x_test = []
+            y_test = []
+
+            with open(label_path_test, 'r') as csvfile:
+                csvreader = csv.reader(csvfile)
+                
+                for row in csvreader:
+                    x_test.append(str(row[0][:-4]))
+                    y_test.append(float(row[-1]))
+        
+            x_test = np.array(x_test)
+            y_test = np.array(y_test)
+
+            self.test_dataset = TestDriveDataset(self.args, x_test, y_test, self.test_perturb, self.test_num)
 
             self.test_dataloader = DataLoader(dataset=self.test_dataset, 
                                                 batch_size=1, 
@@ -209,24 +231,21 @@ class PipelineJoint:
                 clean_batch = np.moveaxis(clean_batch, 1, -1)
                 
                 noise_batch = generate_augmentations_batch(clean_batch, self.train_dataset.get_curr_max())
+                
+                noise_batch = noise_batch / 255.
+                clean_batch = clean_batch / 255.
 
                 clean_batch = np.moveaxis(clean_batch, -1, 1)
-
                 noise_batch = torch.tensor(noise_batch, dtype=torch.float32)
                 clean_batch = torch.tensor(clean_batch, dtype=torch.float32)   
                 angle_batch = torch.unsqueeze(angle_batch, 1)     
 
-                noise_batch = noise_batch.to(self.device)
-                clean_batch = clean_batch.to(self.device)
-                angle_batch = angle_batch.to(self.device)
-
+                noise_batch, clean_batch, angle_batch = noise_batch.to(self.device), clean_batch.to(self.device), angle_batch.to(self.device)
                 # Passing it through model
-                z = self.encoder(clean_batch)
+                z = self.encoder(noise_batch)
 
                 recon_batch = self.decoder(z)
                 sa_batch = self.regressor(z)
-
-                clean_batch = clean_batch / 255.
 
                 recon_loss = self.recon_loss(recon_batch, clean_batch)
                 regr_loss = self.regr_loss(sa_batch, angle_batch)
@@ -245,25 +264,22 @@ class PipelineJoint:
             
             avg_train_batch_loss = round(train_batch_loss / len(self.train_dataloader), 3)
             avg_train_batch_recon_loss = round(train_batch_recon_loss / len(self.train_dataloader), 3)
-            avg_train_batch_emb_loss = round(train_batch_emb_loss / len(self.train_dataloader), 3)
             avg_train_batch_reg_loss = round(train_batch_reg_loss / len(self.train_dataloader), 3)
 
             ma_train = ma(preds_train, gt_train)
 
             val_tuple = self.validate(self.val_dataloader)
             avg_val_batch_loss = val_tuple[0]
-            ma_val = val_tuple[4]
+            ma_val = val_tuple[3]
 
             # Saving epoch train and val loss to their respective collectors
             self.train_loss_collector[ep] = avg_train_batch_loss
             self.train_recon_loss_collector[ep] = avg_train_batch_recon_loss
-            self.train_emb_loss_collector[ep] = avg_train_batch_emb_loss
             self.train_reg_loss_collector[ep] = avg_train_batch_reg_loss
 
             self.val_loss_collector[ep] = avg_val_batch_loss
             self.val_recon_loss_collector[ep] = val_tuple[1]
-            self.val_emb_loss_collector[ep] = val_tuple[2]
-            self.val_reg_loss_collector[ep] = val_tuple[3]
+            self.val_reg_loss_collector[ep] = val_tuple[2]
 
             end_time = time.time()
             epoch_time = end_time - start_time
@@ -298,11 +314,9 @@ class PipelineJoint:
                     "cv": self.train_dataset.get_curr_max(),
                     "train_loss_collector": self.train_loss_collector,
                     "train_recon_loss_collector": self.train_recon_loss_collector,
-                    "train_emb_loss_collector": self.train_emb_loss_collector,
                     "train_reg_loss_collector": self.train_reg_loss_collector,
                     "val_loss_collector": self.val_loss_collector,
                     "val_recon_loss_collector": self.val_recon_loss_collector,
-                    "val_emb_loss_collector": self.val_emb_loss_collector,
                     "val_reg_loss_collector": self.val_reg_loss_collector
                 }, f'{self.args.logs_dir}/{self.args.checkpoints_dir}/checkpoint_best_loss.pt')
 
@@ -321,11 +335,9 @@ class PipelineJoint:
                     "cv": self.train_dataset.get_curr_max(),
                     "train_loss_collector": self.train_loss_collector,
                     "train_recon_loss_collector": self.train_recon_loss_collector,
-                    "train_emb_loss_collector": self.train_emb_loss_collector,
                     "train_reg_loss_collector": self.train_reg_loss_collector,
                     "val_loss_collector": self.val_loss_collector,
                     "val_recon_loss_collector": self.val_recon_loss_collector,
-                    "val_emb_loss_collector": self.val_emb_loss_collector,
                     "val_reg_loss_collector": self.val_reg_loss_collector
                 }, f'{self.args.logs_dir}/{self.args.checkpoints_dir}/checkpoint.pt')
  
@@ -377,7 +389,6 @@ class PipelineJoint:
 
         val_batch_loss = 0
         val_batch_recon_loss = 0
-        val_batch_emb_loss = 0
         val_batch_reg_loss = 0
 
         gt_val = []
@@ -388,275 +399,130 @@ class PipelineJoint:
                 clean_batch, angle_batch = data
                 gt_val.extend(angle_batch.numpy())
 
-                clean_batch = clean_batch.numpy()
-                clean_batch = clean_batch * 255.
-                clean_batch = np.uint8(clean_batch) # Images need to be uint8 for cv2 when doing the augmentations
-                clean_batch = np.moveaxis(clean_batch, 1, -1)
-
-                # Initializing the batches for the first images. This is mainly just for noise_batch
-                # noise_batch = generate_augmentations_batch(clean_batch, curriculum_max)
-
-                clean_batch = np.moveaxis(clean_batch, -1, 1)
-
-                # noise_batch = torch.tensor(noise_batch, dtype=torch.float32)
-                clean_batch = torch.tensor(clean_batch, dtype=torch.float32)   
+                # clean_batch = torch.tensor(clean_batch, dtype=torch.float32)   
                 angle_batch = torch.unsqueeze(angle_batch, 1)     
 
-                # noise_batch = noise_batch.to(self.device)
-                clean_batch = clean_batch.to(self.device)
-                angle_batch = angle_batch.to(self.device)
+                clean_batch, angle_batch = clean_batch.to(self.device), angle_batch.to(self.device)
 
                 # Passing it through model
                 z = self.encoder(clean_batch)
 
                 recon_batch = self.decoder(z)
                 sa_batch = self.regressor(z)
-                # sa_batch = z
                 
-                # sa_recon_batch = self.regressor(self.encoder(recon_batch*255.0))
-
-                clean_batch = clean_batch / 255.
-
                 recon_loss = self.recon_loss(recon_batch, clean_batch)
                 regr_loss = self.regr_loss(sa_batch, angle_batch)
-                # recon_regr_loss = self.regr_loss(sa_recon_batch, angle_batch)
 
-                loss = (recon_loss)  + (1 * regr_loss) # + (1 * recon_regr_loss)
-                # loss = regr_loss
+                loss = (recon_loss)  + (10 * regr_loss)
 
                 val_batch_loss += loss.item()
                 val_batch_recon_loss += recon_loss.item()
-                val_batch_reg_loss += (1 * regr_loss.item())
+                val_batch_reg_loss += (10 * regr_loss.item())
 
                 preds_val.extend(sa_batch.cpu().detach().numpy())
 
         
         avg_val_batch_loss = round(val_batch_loss / len(val_dataloader), 3)
         avg_val_batch_recon_loss = round(val_batch_recon_loss / len(val_dataloader), 3)
-        avg_val_batch_emb_loss = round(val_batch_emb_loss / len(val_dataloader), 3)
         avg_val_batch_reg_loss = round(val_batch_reg_loss / len(val_dataloader), 3)
 
         ma_val = ma(preds_val, gt_val)
 
-        return (avg_val_batch_loss, avg_val_batch_recon_loss, avg_val_batch_emb_loss, avg_val_batch_reg_loss, ma_val)
+        return (avg_val_batch_loss, avg_val_batch_recon_loss, avg_val_batch_reg_loss, ma_val)
 
-    def test_single_pair(self, aug_method, aug_num):
-        aug_method_name, aug_method_level = get_aug_method(aug_method)
+    def test_other(self):
+        other_method = Nvidia().to(self.device)
+        other_method.load_state_dict(torch.load('./saved_models/standard1.pth'))
+        other_method.eval()
 
-        # robust1 = torch.load('./saved_models/standard1.pt')
-        # robust1.eval()
+        print("Started Testing")
 
-        # robust2 = torch.load('./saved_models/standard2.pt')
-        # robust2.eval()
-
-        robust1 = Nvidia().to(self.device)
-        robust1.load_state_dict(torch.load('./saved_models/standard1.pth'))
-        robust1.eval()
-
-        robust2 = Nvidia().to(self.device)
-        robust2.load_state_dict(torch.load('./saved_models/standard1.pth'))
-        robust2.eval()
-
-        # robust1 = ViT(
-        #             image_size=64,
-        #             patch_size=16,
-        #             num_classes=1,
-        #             dim=128,
-        #             depth=64,
-        #             heads=16,
-        #             mlp_dim=256,
-        #             dropout=0.1,
-        #             emb_dropout=0.1
-        #         ).to(self.device)
-        # robust1.load_state_dict(torch.load('./saved_models/standard1.pth'))
-        # robust1.eval()
-
-        # robust2 = ViT(
-        #             image_size=64,
-        #             patch_size=16,
-        #             num_classes=1,
-        #             dim=128,
-        #             depth=64,
-        #             heads=16,
-        #             mlp_dim=256,
-        #             dropout=0.1,
-        #             emb_dropout=0.1
-        #         ).to(self.device)
-        # robust2.load_state_dict(torch.load('./saved_models/standard1.pth'))
-        # robust2.eval()
-
-
-        print("Started Regression")
-
-        aug_steering_angles_robust1 = []
-        clean_steering_angles_robust1 = []
-
-        aug_steering_angles_robust2 = []
-        clean_steering_angles_robust2 = []
-
-        ground_truth = []
+        gt_test = []
+        preds_test = []
 
         with torch.no_grad():
             for batch, data in enumerate(tqdm(self.test_dataloader)):
-                noise_batch, clean_batch, angle_batch = data
+                img_batch, angle_batch = data
+                img_batch, angle_batch = img_batch.to(self.device), angle_batch.to(self.device)
     
-                # Only do this if we are looking at single perturbations
-                if aug_num < 75:
-                    # We've loaded the clean dataset for the single perturbations so that we can augment them at test time.
-                    # This means that we can just augment the noise_batch and then pass it through the AE
-                    noise_batch = np.squeeze(noise_batch.numpy())
-                    noise_batch = np.moveaxis(noise_batch, 0, -1) # Dimensions are 66, 200, 3 after this
-                    noise_batch = np.uint8(noise_batch)
-                    noise_batch = generate_augmentations_test(noise_batch, aug_method_name, aug_method_level)
-                    noise_batch = torch.tensor(noise_batch, dtype=torch.float32)
-                    noise_batch = torch.unsqueeze(noise_batch, dim=0)
+                output = other_method(img_batch)
+                preds_test.append(np.squeeze(output.cpu().detach().clone().numpy()))
 
-                noise_batch, clean_batch, angle_batch = noise_batch.to(self.device), clean_batch.to(self.device), angle_batch.to(self.device)
-
-                # First Robust Regressor
-                sa_preds_aug_robust1, sa_preds_clean_robust1 = feed_through_regressor(robust1, noise_batch, clean_batch)
-
-                aug_steering_angles_robust1.append(sa_preds_aug_robust1)
-                clean_steering_angles_robust1.append(sa_preds_clean_robust1)
-
-                # Second Robust Regressor
-                sa_preds_aug_robust2, sa_preds_clean_robust2 = feed_through_regressor(robust2, noise_batch, clean_batch)
-
-                aug_steering_angles_robust2.append(sa_preds_aug_robust2)
-                clean_steering_angles_robust2.append(sa_preds_clean_robust2)
-
-                # Ground Truth
-                ground_truth_angle = np.squeeze(angle_batch.cpu().detach().clone().numpy())
-                ground_truth.append(ground_truth_angle)
+                gt_test.append(np.squeeze(angle_batch.cpu().detach().clone().numpy()))
         
-        print("\nFinished Regression")
+        print("\nFinished Testing")
 
-        aug_sa_robust1 = np.array(aug_steering_angles_robust1)
-        clean_sa_robust1 = np.array(clean_steering_angles_robust1)
-
-        aug_sa_robust2 = np.array(aug_steering_angles_robust2)
-        clean_sa_robust2 = np.array(clean_steering_angles_robust2)
-
-        ground_truth = np.array(ground_truth)
+        preds_test = np.array(preds_test)
+        gt_test = np.array(gt_test)
 
         results = []
         metric_list = [ma, rmse, mae]
 
         # Model 1
-        calc_metrics(metric_list, results, "standard1", aug_sa_robust1, clean_sa_robust1, ground_truth)
-
-        # Model 2
-        calc_metrics(metric_list, results, "standard2", aug_sa_robust2, clean_sa_robust2, ground_truth)
+        calc_metrics(metric_list, results, "standard1", preds_test, gt_test)
 
         print("Writing Results to Logs")
-        if aug_num < 117:
+        if self.test_num < 117:
             for i in range(len(results)):
                 current = results[i]
-                write_results(aug_method, current[0], current[1], current[2])
+                write_results(self.test_perturb, current[0], current[1])
         else:
             for i in range(len(results)):
                 current = results[i]
-                write_results(aug_method, current[0], current[1], current[2], adversarial=True)
+                write_results(self.test_perturb, current[0], current[1], adversarial=True)
         
         print("Finished Writing Results to Logs\n") 
 
-    def test_our_approach(self, aug_method, aug_num):
-        aug_method_name, aug_method_level = get_aug_method(aug_method)
-
+    def test_our_approach(self):
         encoder = torch.load('./results/trained_models/encoder.pt')
         encoder.eval()
 
         regressor = torch.load('./results/trained_models/regressor.pt')
         regressor.eval()
 
-        decoder = torch.load('./results/trained_models/decoder.pt')
-        decoder.eval()
+        print("Started Testing")
 
-        print("Started Regression")
-
-        aug_steering_angles_ours = []
-        clean_steering_angles_ours = []
-
-        ground_truth = []
+        preds_test = []
+        gt_test = []
 
         with torch.no_grad():
             for batch, data in enumerate(tqdm(self.test_dataloader)):
-                noise_batch, clean_batch, angle_batch = data
-    
-                # Only do this if we are looking at single perturbations
-                if aug_num < 75:
-                    # We've loaded the clean dataset for the single perturbations so that we can augment them at test time.
-                    # This means that we can just augment the noise_batch and then pass it through the AE
-                    noise_batch = np.squeeze(noise_batch.numpy())
-                    noise_batch = np.moveaxis(noise_batch, 0, -1) # Dimensions are 66, 200, 3 after this
-                    noise_batch = np.uint8(noise_batch)
-                    noise_batch = generate_augmentations_test(noise_batch, aug_method_name, aug_method_level)
-                    noise_batch = torch.tensor(noise_batch, dtype=torch.float32)
-                    noise_batch = torch.unsqueeze(noise_batch, dim=0)
+                img_batch, angle_batch = data
+                img_batch, angle_batch = img_batch.to(self.device), angle_batch.to(self.device)
 
-                noise_batch, clean_batch, angle_batch = noise_batch.to(self.device), clean_batch.to(self.device), angle_batch.to(self.device)
-
-                # Our Regressor
-                aug_sa_ours = regressor(encoder(noise_batch))
-                aug_sa_ours = torch.squeeze(aug_sa_ours)
-
-                clean_sa_ours = regressor(encoder(clean_batch))
-                clean_sa_ours = torch.squeeze(clean_sa_ours)
-
-                recon_sa_ours = decoder(encoder(noise_batch))
-                recon_batch = torch.squeeze(recon_sa_ours) * 255.
-
-                aug_steering_angles_ours.append(aug_sa_ours.cpu().detach().clone().numpy())
-                clean_steering_angles_ours.append(clean_sa_ours.cpu().detach().clone().numpy())
+                output = torch.squeeze(regressor(encoder(img_batch)))
+            
+                preds_test.append(output.cpu().detach().clone().numpy())
                 
-                # Ground Truth
-                ground_truth_angle = np.squeeze(angle_batch.cpu().detach().clone().numpy())
-                ground_truth.append(ground_truth_angle)
+                gt_test.append(np.squeeze(angle_batch.cpu().detach().clone().numpy()))
 
-                # Saving sample images to test the efficacy of the autoencoder 
-                # There's potential that the regressor is just that powerful so doing a sanity check to make sure that the reconstructed images are visually what they should look like 
-                # if batch % 80 == 0:
-                #     clean_batch_np = np.squeeze(clean_batch.cpu().detach().clone().numpy())
-                #     noise_batch_np = np.squeeze(noise_batch.cpu().detach().clone().numpy())
-                #     recon_batch_np = np.squeeze(recon_batch.cpu().detach().clone().numpy())
-
-                #     noise_img = Image.fromarray(np.uint8(np.moveaxis(noise_batch_np, 0, -1))).convert('RGB')
-                #     noise_img.save(f'./sample_images/{aug_method}_{batch}_noise.png')
-
-                #     clean_img = Image.fromarray(np.uint8(np.moveaxis(clean_batch_np, 0, -1))).convert('RGB')
-                #     clean_img.save(f'./sample_images/{aug_method}_{batch}_clean.png')
-                
-                #     recon_img = Image.fromarray(np.uint8(np.moveaxis(recon_batch_np, 0, -1))).convert('RGB')
-                #     recon_img.save(f'./sample_images/{aug_method}_{batch}_recon.png')
-
-                    # fig, ax = plt.subplots(3,1, figsize=(8,8), dpi=100)
-                    # ax[0].imshow(Image.fromarray(np.uint8(np.moveaxis(clean_batch_np, 0, -1))).convert('RGB'))
-                    # ax[1].imshow(Image.fromarray(np.uint8(np.moveaxis(noise_batch_np, 0, -1))).convert('RGB'))
-                    # ax[2].imshow(Image.fromarray(np.uint8(np.moveaxis(recon_batch_np, 0, -1))).convert('RGB'))
-                    # fig.savefig(f"./sample_images/{aug_method}_{batch}")
+                # fig, ax = plt.subplots(3,1, figsize=(8,8), dpi=100)
+                # ax[0].imshow(Image.fromarray(np.uint8(np.moveaxis(clean_batch_np, 0, -1))).convert('RGB'))
+                # ax[1].imshow(Image.fromarray(np.uint8(np.moveaxis(noise_batch_np, 0, -1))).convert('RGB'))
+                # ax[2].imshow(Image.fromarray(np.uint8(np.moveaxis(recon_batch_np, 0, -1))).convert('RGB'))
+                # fig.savefig(f"./sample_images/{aug_method}_{batch}")
 
         print("\nFinished Regression")
 
-        aug_sa_ours = np.array(aug_steering_angles_ours)
-        clean_sa_ours = np.array(clean_steering_angles_ours)
+        preds_test = np.array(preds_test)
 
-        ground_truth = np.array(ground_truth)
+        gt_test = np.array(gt_test)
 
         results = []
         metric_list = [ma, rmse, mae]
 
         # Ours
-        calc_metrics(metric_list, results, "ours1", aug_sa_ours, clean_sa_ours, ground_truth)
+        calc_metrics(metric_list, results, "ours1", preds_test, gt_test)
                
         print("Writing Results to Logs")
-        if aug_num < 117:
+        if self.test_num < 117:
             for i in range(len(results)):
                 current = results[i]
-                write_results(aug_method, current[0], current[1], current[2])
+                write_results(self.test_perturb, current[0], current[1])
         else:
             for i in range(len(results)):
                 current = results[i]
-                write_results(aug_method, current[0], current[1], current[2], adversarial=True)
+                write_results(self.test_perturb, current[0], current[1], adversarial=True)
         
         print("Finished Writing Results to Logs\n") 
 
@@ -677,8 +543,8 @@ def get_aug_method(aug_method):
 
     return aug_method_test, aug_level_test
 
-def write_results(aug_method, aug_acc, clean_acc, name, adversarial=False):
-    results = f"{aug_method},{aug_acc},{clean_acc}\n"
+def write_results(aug_method, aug_acc, name, adversarial=False):
+    results = f"{aug_method},{aug_acc}\n"
 
     if adversarial == False:
         with open(f'./results/results_{name}.txt', 'a') as f:
@@ -687,30 +553,10 @@ def write_results(aug_method, aug_acc, clean_acc, name, adversarial=False):
         with open(f'./results/adversarial/results_{name}.txt', 'a') as f:
             f.write(results)
 
-def calc_metrics(metric_list, results, name, aug_results, clean_results, truths):
+def calc_metrics(metric_list, results, name, aug_results, truths):
     for i in range(len(metric_list)):
         func = metric_list[i]
 
         aug_metric_results = func(aug_results, truths)
-        clean_metric_results = func(clean_results, truths) 
 
-        results.append((aug_metric_results, clean_metric_results, f"{name}_{func.__name__}"))
-
-def convert_to_bgr(rgb_batch):
-    rgb_batch_cv2 = np.squeeze(rgb_batch)
-    rgb_batch_cv2 = np.moveaxis(rgb_batch_cv2, 0, -1)
-    bgr_batch = cv2.cvtColor(rgb_batch_cv2, cv2.COLOR_RGB2BGR)
-    bgr_batch = np.moveaxis(bgr_batch, -1, 0)
-    bgr_batch = torch.tensor(bgr_batch, dtype=torch.float32)
-    bgr_batch = torch.unsqueeze(bgr_batch, dim=0)
-
-    return bgr_batch
-
-def feed_through_regressor(model, noise_batch, clean_batch):
-    preds_aug = model(noise_batch) # Steering Angle predictions on the augmented images (no denoising)
-    preds_clean = model(clean_batch)
-
-    preds_aug = np.squeeze(preds_aug.cpu().detach().clone().numpy())
-    preds_clean = np.squeeze(preds_clean.cpu().detach().clone().numpy())
-
-    return preds_aug, preds_clean
+        results.append((aug_metric_results, f"{name}_{func.__name__}"))

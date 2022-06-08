@@ -78,20 +78,16 @@ class RN50Encoder(nn.Module):
         self.fc = nn.Linear(512 * 4, num_classes)
 
     def forward(self, x):
-        #x = Lambda(lambda x: x/127.5 - 1.0)(x)
-        x = x/127.5 - 1.0 # -1,1 range
-        #print("Before Conv 1:", x)
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
         x = self.layer1(x)
         x = self.layer2(x)
-        print(x.shape, "encoder")
-        # x = self.layer3(x)
-        # x = self.layer4(x)
-        # x = self.avgpool(x)
-        # x = x.reshape(x.shape[0], -1)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        x = self.avgpool(x)
+        x = x.reshape(x.shape[0], -1)
 
         return x
 
@@ -127,22 +123,10 @@ class RN50Head(nn.Module):
     def __init__(self, layers, image_channels, num_classes, block=block):
         super(RN50Head, self).__init__()
         self.in_channels = 512
-        self.layer3 = self._make_layer(
-            block, layers[2], intermediate_channels=256, stride=2
-        )
-        self.layer4 = self._make_layer(
-            block, layers[3], intermediate_channels=512, stride=2
-        )
 
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(512 * 4, num_classes)
 
     def forward(self, x):
-        x = self.layer3(x)
-        x = self.layer4(x)
-
-        x = self.avgpool(x)
-        x = x.reshape(x.shape[0], -1)
         x = self.fc(x)
 
         return x
@@ -181,7 +165,6 @@ class RN50Decoder(nn.Module):
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
 
-        self.conversion = nn.Linear(115200, in_dim)
         self.decFC1 = nn.Linear(in_dim, out_dim)
         self.decConv2 = nn.ConvTranspose2d(64, 32, 3, stride=2, padding=1)
         self.decConv3 = nn.ConvTranspose2d(32, 16, 3, stride=2, padding=1)
@@ -189,9 +172,6 @@ class RN50Decoder(nn.Module):
         self.decConv5 = nn.ConvTranspose2d(8, 3, 3, stride=2, padding=(1,0), output_padding=1)
     
     def forward(self, x):
-        x = x.reshape(-1, 512 * 9 * 25)
-        x = self.relu(self.conversion(x))
-
         x = self.relu(self.decFC1(x))
         
         x = x.view(-1, 64, 5, 13)
@@ -202,9 +182,3 @@ class RN50Decoder(nn.Module):
         x = self.sigmoid((self.decConv5(x)))
 
         return x
-
-
-
-# def ResNet50(img_channel=3, num_classes=1): # Num classes = 1 for regression
-#     return ResNet(block, [3, 4, 6, 3], img_channel, num_classes)
-

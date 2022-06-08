@@ -6,11 +6,15 @@ from PIL import Image
 import os
 from tqdm import tqdm
 
-image_path_train='./data/waymo_train/'
-label_path_train='./data/labels_waymo_train.csv'
+'''
+    Old method of generating the datasets into npz files. Not necessary now though, but kept for posterity
+'''
 
-image_path_test = './data/testWaymo/'
-label_path_test = './data/labels_waymotest.csv'
+image_path_train='./data/sully_train/'
+label_path_train='./data/labels_sully_train.csv'
+
+image_path_test = './data/testsully/'
+label_path_test = './data/labels_sullytest.csv'
 
 def generate_project_datasets():
     csv_train = []
@@ -52,8 +56,8 @@ def generate_project_datasets():
     print(imgs_train.shape, angles_train.shape)
     print(imgs_val.shape, angles_val.shape)
         
-    np.savez('./data/train_waymo.npz', train_input_images=imgs_train, train_target_angles=angles_train)
-    np.savez('./data/val_waymo.npz', val_input_images=imgs_val, val_target_angles=angles_val)
+    np.savez('./data/train_sully.npz', train_input_images=imgs_train, train_target_angles=angles_train)
+    np.savez('./data/val_sully.npz', val_input_images=imgs_val, val_target_angles=angles_val)
 
     csv_test = []
 
@@ -82,7 +86,7 @@ def generate_project_datasets():
 
     print(imgs_test.shape, angles_test.shape)
 
-    np.savez('./data/test_waymo.npz', test_input_images=imgs_test, test_target_images=imgs_test, test_target_angles=angles_test)
+    np.savez('./data/test_sully.npz', test_input_images=imgs_test, test_target_images=imgs_test, test_target_angles=angles_test)
 
 
 if __name__ == "__main__":

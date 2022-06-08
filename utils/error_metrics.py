@@ -27,7 +27,7 @@ def ma(predictions, targets, check=False):
         mean_acc = (acc_1 + acc_2 + acc_3 + acc_4 + acc_5 + acc_6)/6
         mean_acc = round(mean_acc, 4) 
 
-        # The point of this is to see the actual number breakdown as the difference between Mean Acurracys isn't linear
+        # Checking to see the individual counts of each threshold
         # if check == True:
         #     with open('./logs/results_count.txt', 'a') as f:
         #         f.write(f"Count 1.5: {count_1}/{total}\n")

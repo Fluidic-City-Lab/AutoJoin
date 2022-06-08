@@ -32,7 +32,7 @@ class net_nvidia_pytorch(nn.Module):
 
     def forward(self, x):
         # x = LambdaLayer(lambda x: x/127.5 - 1.0)(x)
-        x = x / 255.0
+        # x = x / 255.0
         x = F.elu(self.conv1(x))
         x = F.elu(self.conv2(x))
         x = F.elu(self.conv3(x))

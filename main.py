@@ -1,7 +1,7 @@
 from tqdm import tqdm
 import argparse
 
-from pipelines.pipeline_joint import PipelineJoint
+from pipeline import PipelineJoint
 from utils.stats_utils_joint import calc_comparison_baseline, calc_avg_categories, generate_average_file
 
 from models.joint_nvidia import EncoderNvidia, DecoderNvidia, RegressorNvidia
@@ -81,18 +81,18 @@ def main(args):
         for i in tqdm(range(117)):
             print(f"\n{i+1} {aug_list[i]}")
 
-            pl = PipelineJoint(args, aug_list[i], "test", i)
-            pl.test_our_approach(aug_list[i], i)
+            pl = PipelineJoint(args, "test", aug_list[i], i)
+            pl.test_our_approach()
     
     if args.run_mode == "test_others":
         aug_list = get_aug_list('./aug_list_all.txt')   
 
         # Testing on the benchmark datasets: single, clean, combined, & unseen
-        for i in tqdm(range(82, 117)):
+        for i in tqdm(range(117)):
             print(f"\n{i+1} {aug_list[i]}")
 
-            pl = PipelineJoint(args, aug_list[i], "test", i)
-            pl.test_single_pair(aug_list[i], i)
+            pl = PipelineJoint(args, "test", aug_list[i], i)
+            pl.test_other()
 
     # generate_average_files()
     # calc_all_avgs_categories()
@@ -111,7 +111,7 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", default="honda")
     parser.add_argument("--model", default="resnet")
     parser.add_argument("--load", default="false")
-    parser.add_argument("--run_mode", default="test", choices=["train", "test_ours", "test_others"])
-    parser.add_argument("--img_dim", type=int, default=64)
+    parser.add_argument("--run_mode", default="train", choices=["train", "test_ours", "test_others"])
+    parser.add_argument("--img_dim", type=int, default=None)
 
     main(parser.parse_args())

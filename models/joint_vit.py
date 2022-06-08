@@ -26,32 +26,19 @@ class EncoderViT(nn.Module):
         super().__init__()
 
         # This is ViT-S settings
-        # self.regressor = ViT(
-        #             image_size=int(args.img_dim),
-        #             patch_size=16,
-        #             num_classes=1000,
-        #             dim=384,
-        #             depth=12,
-        #             heads=6,
-        #             mlp_dim=1536,
-        #             dropout=0.1,
-        #             emb_dropout=0.1
-        #         )
+        self.regressor = ViT(
+                    image_size=int(args.img_dim),
+                    patch_size=16,
+                    num_classes=1000,
+                    dim=384,
+                    depth=12,
+                    heads=6,
+                    mlp_dim=1536,
+                    dropout=0.1,
+                    emb_dropout=0.1
+                )       
         
-        # self.regressor.load_state_dict(torch.load("deit_small.pth"))
-        
-        # This is SimpleViT with ViT-S settings
-        # self.regressor = SimpleViT(
-        #             image_size=int(args.img_dim),
-        #             patch_size=16,
-        #             num_classes=1000,
-        #             dim=384,
-        #             depth=12,
-        #             heads=6,
-        #             mlp_dim=1536,
-        #         )        
-        
-        self.regressor = deit_small_patch16_224(pretrained=True)
+        # self.regressor = deit_small_patch16_224(pretrained=True)
         
 
     def forward(self, x):
@@ -63,13 +50,17 @@ class EncoderViT(nn.Module):
 class RegressorViT(nn.Module):
     def __init__(self):
         super().__init__()
-        self.fc1 = nn.Linear(1000, 1)
-        # self.fc2 = nn.Linear(64, 1)
-        
+
+        self.relu = nn.ReLU()
+
+        self.fc1 = nn.Linear(1000, 512)
+        self.fc2 = nn.Linear(512, 256)
+        self.fc3 = nn.Linear(256, 1)        
 
     def forward(self, x):
-        # x = F.relu(self.fc1(x))
-        sa = self.fc1(x)
+        x = self.relu(self.fc1(x))
+        x = self.relu(self.fc2(x))
+        sa = self.fc3(x)
 
         return sa
 

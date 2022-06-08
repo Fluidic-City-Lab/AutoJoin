@@ -1,3 +1,4 @@
+clean
 R_darker_1
 R_darker_2
 R_darker_3
@@ -73,7 +74,6 @@ noise_2
 noise_3
 noise_4
 noise_5
-clean
 combined_1
 combined_2
 combined_3

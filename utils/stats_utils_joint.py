@@ -150,14 +150,14 @@ def calc_comparison_baseline(results_ours_file, results_robust_file, results_bas
     recon_diff_avg_overall = np.average(ours_diffs)
     robust_diff_avg_overall = np.average(robust_diffs)
 
-    ours_amai_clean = np.average(ours_diffs[75])
-    shen_amai_clean = np.average(robust_diffs[75])
+    ours_amai_clean = np.average(ours_diffs[0])
+    shen_amai_clean = np.average(robust_diffs[0])
 
-    ours_amai_single = np.average(ours_diffs[0:75])
-    shen_amai_single = np.average(robust_diffs[0:75])
+    ours_amai_single = np.average(ours_diffs[1:76])
+    shen_amai_single = np.average(robust_diffs[1:76])
 
-    ours_mmai_single = np.max(ours_diffs[0:75])
-    shen_mmai_single = np.max(robust_diffs[0:75])
+    ours_mmai_single = np.max(ours_diffs[0:76])
+    shen_mmai_single = np.max(robust_diffs[0:76])
 
     ours_amai_combined = np.average(ours_diffs[76:82])
     shen_amai_combined = np.average(robust_diffs[76:82])
@@ -201,14 +201,14 @@ def calc_avg_categories(results_file, metric, aug_tech):
 
     if metric == "ma":
         preds_avg_overall = np.average(results)
-        preds_avg_clean = np.average(results[75])
-        preds_avg_single = np.average(results[0:75])
+        preds_avg_clean = np.average(results[0])
+        preds_avg_single = np.average(results[1:76])
         preds_avg_combined = np.average(results[76:82])
         preds_avg_unseen = np.average(results[82:])
     else:
         preds_avg_overall = 15 * np.average(results)
-        preds_avg_clean = 15 * np.average(results[75])
-        preds_avg_single = 15 * np.average(results[0:75])
+        preds_avg_clean = 15 * np.average(results[0])
+        preds_avg_single = 15 * np.average(results[1:76])
         preds_avg_combined = 15 * np.average(results[76:82])
         preds_avg_unseen = 15 * np.average(results[82:])
 
