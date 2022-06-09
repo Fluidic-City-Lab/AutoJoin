@@ -29,7 +29,7 @@ class EncoderViT(nn.Module):
         self.regressor = ViT(
                     image_size=int(args.img_dim),
                     patch_size=16,
-                    num_classes=1000,
+                    num_classes=50,
                     dim=192,
                     depth=12,
                     heads=3,
@@ -53,8 +53,8 @@ class RegressorViT(nn.Module):
 
         self.relu = nn.ReLU()
 
-        self.fc1 = nn.Linear(1000, 512)
-        self.fc2 = nn.Linear(512, 1)
+        self.fc1 = nn.Linear(50, 10)
+        self.fc2 = nn.Linear(10, 1)
 
     def forward(self, x):
         x = self.relu(self.fc1(x))
@@ -63,7 +63,7 @@ class RegressorViT(nn.Module):
         return sa
 
 class DecoderViT(nn.Module):
-    def __init__(self, args, in_dim=1000, out_dim=64*5*13):
+    def __init__(self, args, in_dim=50, out_dim=64*5*13):
         super().__init__()
 
         self.args = args

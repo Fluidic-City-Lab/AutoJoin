@@ -113,7 +113,7 @@ class PipelineJoint:
             elif self.args.model == "nvidia":                
                 self.encoder = EncoderNvidia().to(self.device)
                 self.regressor = RegressorNvidia().to(self.device)
-                self.decoder = DecoderNvidia().to(self.device)
+                self.decoder = DecoderNvidia(self.args).to(self.device)
             
             elif self.args.model == "vit":
                 self.encoder = EncoderViT(self.args).to(self.device)
@@ -495,8 +495,8 @@ class PipelineJoint:
         elif self.args.model == "nvidia":
             encoder = EncoderNvidia().to(self.device)
             regressor = RegressorNvidia().to(self.device)
-        elif self.argsmodel == "vit":
-            encoder = EncoderViT().to(self.device)
+        elif self.args.model == "vit":
+            encoder = EncoderViT(self.args).to(self.device)
             regressor = RegressorViT().to(self.device)
 
         encoder.load_state_dict(torch.load('./results/trained_models/encoder.pth'))

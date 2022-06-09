@@ -26,7 +26,7 @@ class EncoderNvidia(nn.Module):
         x = F.elu(self.conv5(x))
         # print(x.shape)
 
-        x = x.reshape(-1, 64 * 1 * 18)
+        x = x.reshape(x.shape[0], -1)
         
         x = F.elu(self.fc1(x))
         x = F.elu(self.fc2(x))
@@ -48,9 +48,10 @@ class RegressorNvidia(nn.Module):
         return sa
 
 class DecoderNvidia(nn.Module):
-    def __init__(self, in_dim=50, out_dim=64*5*13):
+    def __init__(self, args, in_dim=50, out_dim=64*5*13):
         super().__init__()
 
+        self.img_dim = int(args.img_dim)
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
 
@@ -59,6 +60,7 @@ class DecoderNvidia(nn.Module):
         self.decConv3 = nn.ConvTranspose2d(32, 16, 3, stride=2, padding=1)
         self.decConv4 = nn.ConvTranspose2d(16, 8, 3, stride=2, padding=(1,0))
         self.decConv5 = nn.ConvTranspose2d(8, 3, 3, stride=2, padding=(1,0), output_padding=1)
+        # self.decFC2 = nn.Linear(3*66*200, (3*self.img_dim*self.img_dim))
     
     def forward(self, x):
         x = self.relu(self.decFC1(x))
@@ -69,5 +71,10 @@ class DecoderNvidia(nn.Module):
         x = self.relu((self.decConv3(x)))
         x = self.relu((self.decConv4(x)))     
         x = self.sigmoid((self.decConv5(x)))
+
+        # x = x.reshape(x.shape[0], -1)
+        # x = self.decFC2(x)
+
+        # x = x.reshape(x.shape[0], 3, self.img_dim, self.img_dim)
 
         return x

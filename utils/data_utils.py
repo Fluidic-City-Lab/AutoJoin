@@ -64,7 +64,6 @@ class TestDriveDataset(Dataset):
         self.y = y # steering angle label
 
         self.test_perturb = test_perturb
-        print(self.test_perturb)
         self.test_num = test_num
 
         assert (len(self.x) == len(self.y))
@@ -232,5 +231,8 @@ class TestDriveDataset(Dataset):
             img = np.moveaxis(np.asarray(img), -1, 0)
         
         img = img / 255.
+        
+        if self.args.img_dim:
+            img = np.resize(img, (3,int(self.args.img_dim),int(self.args.img_dim)))
 
         return [img.astype(np.float32), label.astype(np.float32)]
