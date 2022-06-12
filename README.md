@@ -28,4 +28,4 @@ After evaluating, a command like:
 python3 main.py --dataset sully --model nvidia --run_mode test_autojoin
 ```
 
-Will result in testing on the model trained using the above command.
+Will result in testing on the model trained using the above training command.
