@@ -51,7 +51,8 @@ class DecoderNvidia(nn.Module):
     def __init__(self, args, in_dim=50, out_dim=64*5*13):
         super().__init__()
 
-        self.img_dim = int(args.img_dim)
+        if args.img_dim:
+            self.img_dim = int(args.img_dim)
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
 
