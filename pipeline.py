@@ -26,8 +26,6 @@ from models.nvidia import Nvidia
 from models.resnet50 import ResNet50
 from vit_pytorch import ViT
 
-
-
 from PIL import Image
 
 class PipelineJoint:
@@ -127,6 +125,7 @@ class PipelineJoint:
             self.regr_loss = nn.L1Loss()
         
             self.params = list(self.encoder.parameters()) + list(self.regressor.parameters()) + list(self.decoder.parameters())
+            # self.params = list(self.encoder.parameters()) + list(self.regressor.parameters())
 
             base_optimizer = torch.optim.Adam
             self.optimizer = SAM(self.params, base_optimizer, lr=self.lr)
@@ -257,7 +256,8 @@ class PipelineJoint:
                 regr_loss = self.regr_loss(sa_batch, angle_batch)
 
                 # 1st forward-backward pass for SAM
-                loss = (self.lambda1 * recon_loss) + (self.lambda2 * regr_loss) 
+                # loss = (self.lambda1 * recon_loss) + (self.lambda2 * regr_loss) 
+                loss = (self.lambda2 * regr_loss) 
                 loss.backward()
                 self.optimizer.first_step(zero_grad=True)
 
@@ -271,7 +271,8 @@ class PipelineJoint:
                 regr_loss = self.regr_loss(sa_batch, angle_batch)
 
                 # 2nd forward-backward pass for SAM
-                ((self.lambda1 * recon_loss) + (self.lambda2 * regr_loss)).backward()
+                # ((self.lambda1 * recon_loss) + (self.lambda2 * regr_loss)).backward()
+                ((self.lambda2 * regr_loss)).backward() 
                 self.optimizer.second_step(zero_grad=True)
 
                 # self.optimizer.zero_grad()
@@ -425,7 +426,8 @@ class PipelineJoint:
                 recon_loss = self.recon_loss(recon_batch, clean_batch)
                 regr_loss = self.regr_loss(sa_batch, angle_batch)
 
-                loss = (self.lambda1 * recon_loss)  + (self.lambda2 * regr_loss)
+                # loss = (self.lambda1 * recon_loss)  + (self.lambda2 * regr_loss)
+                loss = (self.lambda2 * regr_loss) 
 
                 val_batch_loss += loss.item()
                 val_batch_recon_loss += (self.lambda1 * recon_loss.item())
