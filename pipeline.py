@@ -248,8 +248,8 @@ class PipelineJoint:
                 recon_batch = self.decoder(z)
                 sa_batch = self.regressor(z)
 
-                recon_loss = self.recon_loss(recon_batch, clean_batch)
-                regr_loss = self.regr_loss(sa_batch, angle_batch)
+                recon_loss = self.recon_loss(recon_batch, clean_batch) # Unsupervised loss
+                regr_loss = self.regr_loss(sa_batch, angle_batch) # Supervised loss
 
                 loss = (self.lambda1 * recon_loss) + (self.lambda2 * regr_loss) 
 
@@ -474,8 +474,8 @@ class PipelineJoint:
         elif self.args.model == "nvidia":
             encoder = EncoderNvidia().to(self.device)
             regressor = RegressorNvidia().to(self.device)
-        elif self.argsmodel == "vit":
-            encoder = EncoderViT().to(self.device)
+        elif self.args.model == "vit":
+            encoder = EncoderViT(self.args).to(self.device)
             regressor = RegressorViT().to(self.device)
 
         encoder.load_state_dict(torch.load('./results/trained_models/encoder.pth'))

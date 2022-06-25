@@ -66,7 +66,7 @@ def calc_all_avgs_categories():
 
         for i in range(len(aug_techs)):
             for j in range(len(metrics)):
-                calc_avg_categories(f'./logs/results_{aug_techs[i]}_{metrics[j]}.txt', metrics[j], aug_techs[i])
+                calc_avg_categories(f'./logs/results_{aug_techs[i]}1_{metrics[j]}.txt', metrics[j], aug_techs[i])
 
 
 def main(args):
@@ -83,6 +83,8 @@ def main(args):
 
             pl = PipelineJoint(args, "test", aug_list[i], i)
             pl.test_our_approach()
+        
+        calc_all_avgs_categories()
     
     if args.run_mode == "test_others":
         aug_list = get_aug_list('./aug_list_all.txt')   
