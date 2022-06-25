@@ -64,8 +64,11 @@ class TestDriveDataset(Dataset):
         self.y = y # steering angle label
 
         self.test_perturb = test_perturb
-        print(self.test_perturb)
         self.test_num = test_num
+
+        self.transform = T.Compose(
+                [T.ToTensor()]
+            )
 
         assert (len(self.x) == len(self.y))
     
@@ -209,8 +212,8 @@ class TestDriveDataset(Dataset):
                 print(img_path, " not exists")
 
             img = Image.open(img_path)
-            img = img.convert("RGB")
-            img = np.moveaxis(np.asarray(img), -1, 0)
+            # img = img.convert("RGB")
+            # img = np.moveaxis(np.asarray(img), -1, 0)
 
         elif self.test_num < 76: # Single Perturbation
             img_path = f'{self.args.data_dir}/{self.args.dataset}/test/clean/{self.x[key]}' + ".jpg"
@@ -219,18 +222,20 @@ class TestDriveDataset(Dataset):
                 print(img_path, " not exists")
 
             img = Image.open(img_path)
-            img = img.convert("RGB")
             img = np.asarray(img)
-            img = self.perturb(img) 
+            img = self.perturb(img)
+            img = np.moveaxis(img, 0, -1) 
+            img = Image.fromarray(np.uint8(img), "RGB")
             
-
         else: # Combined and Unseen
             img_path = f'{self.args.data_dir}/{self.args.dataset}/test/{self.test_perturb}/{self.x[key]}' + ".jpg"
 
             img = Image.open(img_path)
-            img = img.convert("RGB")
-            img = np.moveaxis(np.asarray(img), -1, 0)
+            # img = np.moveaxis(np.asarray(img), -1, 0)
         
-        img = img / 255.
+        if self.args.img_dim:
+            img = img.resize((self.args.img_dim, self.args.img_dim))
+        
+        img = self.transform(img)
 
-        return [img.astype(np.float32), label.astype(np.float32)]
+        return [img, label.astype(np.float32)]

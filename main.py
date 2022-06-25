@@ -36,8 +36,8 @@ def generate_average_files():
 
     for i in range(len(aug_techs)):
         for j in range(len(metrics)):
-            generate_average_file(f'./logs/results_{aug_techs[i]}1_{metrics[j]}.txt', 
-                f'./logs/results_{aug_techs[i]}2_{metrics[j]}.txt', 
+            generate_average_file(f'./results/results_{aug_techs[i]}1_{metrics[j]}.txt', 
+                f'./results/results_{aug_techs[i]}2_{metrics[j]}.txt', 
                 f"{aug_techs[i]}_{metrics[j]}")
 
 def calc_comparisons_baseline():
@@ -54,9 +54,9 @@ def calc_comparisons_baseline():
 
     for i in range(len(aug_techs)):
         for j in range(len(metrics)):
-            calc_comparison_baseline(f'./logs/results_ours_{metrics[j]}.txt', 
-                f'./logs/results_{aug_techs[i]}_{metrics[j]}.txt', 
-                f'./logs/results_standard_{metrics[j]}.txt', metrics[j], aug_techs[i])
+            calc_comparison_baseline(f'./results/results_ours_{metrics[j]}.txt', 
+                f'./results/results_{aug_techs[i]}_{metrics[j]}.txt', 
+                f'./results/results_standard_{metrics[j]}.txt', metrics[j], aug_techs[i])
 
 def calc_all_avgs_categories():
         aug_techs = ["standard", "shen", "advbn", "ours", "augmix", "maxup", "augmax"]
@@ -66,7 +66,7 @@ def calc_all_avgs_categories():
 
         for i in range(len(aug_techs)):
             for j in range(len(metrics)):
-                calc_avg_categories(f'./logs/results_{aug_techs[i]}1_{metrics[j]}.txt', metrics[j], aug_techs[i])
+                calc_avg_categories(f'./results/results_{aug_techs[i]}1_{metrics[j]}.txt', metrics[j], aug_techs[i])
 
 
 def main(args):
@@ -96,8 +96,6 @@ def main(args):
             pl = PipelineJoint(args, "test", aug_list[i], i)
             pl.test_other()
 
-    # generate_average_files()
-    # calc_all_avgs_categories()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

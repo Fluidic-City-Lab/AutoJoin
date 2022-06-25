@@ -217,7 +217,7 @@ def calc_avg_categories(results_file, metric, aug_tech):
     print(f"AMAI\tAMAI\tAMAI\tAMAI\n")
     print(f"{preds_avg_clean:.2f}\t{preds_avg_single:.2f}\t{preds_avg_combined:.2f}\t{preds_avg_unseen:.2f}\n")
 
-    with open(f'./logs/averages_{aug_tech}_{metric}.txt', 'a') as f:
+    with open(f'./results/averages_{aug_tech}_{metric}.txt', 'a') as f:
         f.write(f"{aug_tech} Overall AMAI: {preds_avg_overall}\n")
         f.write(f"Clean\tSingle Perturb\tCombined Pert.\t Unseen Perturb\n")
         f.write(f"AMAI\tAMAI\tAMAI\tAMAI\n")
