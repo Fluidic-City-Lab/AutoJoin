@@ -12,8 +12,8 @@ class EncoderNvidia(nn.Module):
         self.conv4 = nn.Conv2d(48, 64, 3)
         self.conv5 = nn.Conv2d(64, 64, 3)
         
-        self.fc1 = nn.Linear(64 * 1 * 18, 100) # When images are 66 x 200
-        # self.fc1 = nn.Linear(64 * 1 * 1, 100) # When images are 64 x 64
+        # self.fc1 = nn.Linear(64 * 1 * 18, 100) # When images are 66 x 200
+        self.fc1 = nn.Linear(64 * 1 * 1, 100) # When images are 64 x 64
         # self.fc1 = nn.Linear(64 * 9 * 9, 100) # When images are 128 x 128
         self.fc2 = nn.Linear(100, 50)
         
@@ -61,7 +61,7 @@ class DecoderNvidia(nn.Module):
         self.decConv3 = nn.ConvTranspose2d(32, 16, 3, stride=2, padding=1)
         self.decConv4 = nn.ConvTranspose2d(16, 8, 3, stride=2, padding=(1,0))
         self.decConv5 = nn.ConvTranspose2d(8, 3, 3, stride=2, padding=(1,0), output_padding=1)
-        # self.decFC2 = nn.Linear(3*66*200, (3*self.img_dim*self.img_dim))
+        self.decFC2 = nn.Linear(3*66*200, (3*self.img_dim*self.img_dim))
     
     def forward(self, x):
         x = self.relu(self.decFC1(x))
@@ -73,9 +73,9 @@ class DecoderNvidia(nn.Module):
         x = self.relu((self.decConv4(x)))     
         x = self.sigmoid((self.decConv5(x)))
 
-        # x = x.reshape(x.shape[0], -1)
-        # x = self.decFC2(x)
+        x = x.reshape(x.shape[0], -1)
+        x = self.decFC2(x)
 
-        # x = x.reshape(x.shape[0], 3, self.img_dim, self.img_dim)
+        x = x.reshape(x.shape[0], 3, self.img_dim, self.img_dim)
 
         return x

@@ -26,17 +26,30 @@ class EncoderViT(nn.Module):
         super().__init__()
 
         # This is ViT-Ti settings
+        # self.regressor = ViT(
+        #             image_size=int(args.img_dim),
+        #             patch_size=16,
+        #             num_classes=50,
+        #             dim=192,
+        #             depth=12,
+        #             heads=3,
+        #             mlp_dim=768,
+        #             dropout=0.1,
+        #             emb_dropout=0.1
+        #         )  
+
+        # This is ViT-Micro settings
         self.regressor = ViT(
                     image_size=int(args.img_dim),
                     patch_size=16,
                     num_classes=50,
-                    dim=192,
-                    depth=12,
+                    dim=128,
+                    depth=6,
                     heads=3,
-                    mlp_dim=768,
+                    mlp_dim=512,
                     dropout=0.1,
                     emb_dropout=0.1
-                )       
+                )      
         
         # self.regressor = deit_small_patch16_224(pretrained=True)
         
