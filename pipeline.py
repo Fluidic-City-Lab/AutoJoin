@@ -7,6 +7,8 @@ from sklearn.model_selection import train_test_split
 
 import torch
 from torch import nn
+import torch.nn.functional as F
+
 from torch.utils.data import DataLoader
 
 import matplotlib.pyplot as plt
@@ -110,7 +112,7 @@ class PipelineJoint:
             elif self.args.model == "nvidia":                
                 self.encoder = EncoderNvidia().to(self.device)
                 self.regressor = RegressorNvidia().to(self.device)
-                self.decoder = DecoderNvidia().to(self.device)
+                self.decoder = DecoderNvidia(self.args).to(self.device)
             
             elif self.args.model == "vit":
                 self.encoder = EncoderViT(self.args).to(self.device)
@@ -122,9 +124,17 @@ class PipelineJoint:
 
             self.recon_loss = nn.MSELoss()
             self.regr_loss = nn.L1Loss()
+            self.gan_loss = nn.BCELoss()
         
-            self.params = list(self.encoder.parameters()) + list(self.regressor.parameters()) + list(self.decoder.parameters())
-            self.optimizer = torch.optim.Adam(self.params, lr=self.lr)
+            # self.params = list(self.encoder.parameters()) + list(self.regressor.parameters()) + list(self.decoder.parameters())
+            self.disc = list(self.encoder.parameters()) + list(self.regressor.parameters())
+            self.gen = list(self.decoder.parameters())
+            self.optimizer_disc = torch.optim.Adam(self.disc, lr=self.lr)
+            self.optimizer_gen = torch.optim.Adam(self.gen, lr=self.lr)
+            
+            self.real_label = 1
+            self.fake_label = 0
+            
             self.load_epoch = 0
             self.best_loss = float('inf')
 
@@ -242,24 +252,48 @@ class PipelineJoint:
                 angle_batch = torch.unsqueeze(angle_batch, 1)     
 
                 noise_batch, clean_batch, angle_batch = noise_batch.to(self.device), clean_batch.to(self.device), angle_batch.to(self.device)
-                # Passing it through model
-                z = self.encoder(noise_batch)
 
-                recon_batch = self.decoder(z)
-                sa_batch = self.regressor(z)
+                torch.autograd.set_detect_anomaly(True)
 
-                recon_loss = self.recon_loss(recon_batch, clean_batch) # Unsupervised loss
-                regr_loss = self.regr_loss(sa_batch, angle_batch) # Supervised loss
+                z_clean = self.encoder(clean_batch)
 
-                loss = (self.lambda1 * recon_loss) + (self.lambda2 * regr_loss) 
+                # Discriminator/Regressor Training 
+                self.optimizer_disc.zero_grad()
 
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
+                gan_label = torch.full((self.batch_size, ), self.real_label, dtype=torch.float, device=self.device)
+                output_real = F.sigmoid(self.regressor(z_clean)).view(-1)
+                err_disc_real = self.gan_loss(output_real, gan_label)
+                err_disc_real.backward()
 
-                train_batch_loss += loss.item()
-                train_batch_recon_loss += (self.lambda1 * recon_loss.item())
-                train_batch_reg_loss += (self.lambda2 * regr_loss.item())
+                with torch.no_grad():
+                    z_noise = self.encoder(noise_batch)
+
+                fake_images = self.decoder(z_noise)
+                gan_label.fill_(self.fake_label)
+                output_fake = F.sigmoid(self.regressor(self.encoder(fake_images.detach()))).view(-1)
+                err_disc_fake = self.gan_loss(output_fake, gan_label)
+                err_disc_fake.backward()
+
+                sa_batch = self.regressor(z_noise)
+                regr_loss = self.lambda2 * self.regr_loss(sa_batch, angle_batch)
+                regr_loss.backward()
+
+                self.optimizer_disc.step()
+                
+                # Generator/Decoder Training
+                self.optimizer_gen.zero_grad()
+
+                gan_label.fill_(self.real_label)
+                output_fake = F.sigmoid(self.regressor(self.encoder(fake_images))).view(-1)
+                err_gen = self.gan_loss(output_fake, gan_label)
+                err_gen.backward()
+
+                self.optimizer_gen.step()
+
+                # Logging the loss
+                train_batch_loss += (err_disc_real.item() + err_disc_fake.item() + regr_loss.item() + err_gen.item())
+                train_batch_recon_loss += (err_disc_real.item() + err_disc_fake.item() + err_gen.item())
+                train_batch_reg_loss += (regr_loss.item())
 
                 preds_train.extend(sa_batch.cpu().detach().numpy())
             
@@ -398,16 +432,16 @@ class PipelineJoint:
                 # Passing it through model
                 z = self.encoder(clean_batch)
 
-                recon_batch = self.decoder(z)
+                # recon_batch = self.decoder(z)
                 sa_batch = self.regressor(z)
                 
-                recon_loss = self.recon_loss(recon_batch, clean_batch)
+                # recon_loss = self.recon_loss(recon_batch, clean_batch)
                 regr_loss = self.regr_loss(sa_batch, angle_batch)
 
-                loss = (self.lambda1 * recon_loss)  + (self.lambda2 * regr_loss)
+                loss = (self.lambda2 * regr_loss)
 
                 val_batch_loss += loss.item()
-                val_batch_recon_loss += (self.lambda1 * recon_loss.item())
+                val_batch_recon_loss += 0 # (self.lambda1 * recon_loss.item())
                 val_batch_reg_loss += (self.lambda2 * regr_loss.item())
 
                 preds_val.extend(sa_batch.cpu().detach().numpy())
