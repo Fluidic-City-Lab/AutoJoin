@@ -21,6 +21,8 @@ python3 main.py --dataset sully --model nvidia --train_epochs 500 --seed 34222 -
 ```
 Will start the training using the Nvidia architecture, on the Sully dataset, for 500 epochs with a batch_size of 128. There are more settings that can be played around with as well.
 
+The above command can be swapped out to train on the ResNet50 architecture by swapping out --model nvidia for --model resnet. Only the RN50 architecture was evaluated for this paper, although the other ResNet architectures could be swapped in.
+
 If on the vit-sam branch, a command like:
 ```
 python3 main.py --dataset sully --model vit --train_epochs 500 --seed 34222 --batch_size 128 --img_dim 32 --run_mode train 
