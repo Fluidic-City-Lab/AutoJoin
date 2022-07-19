@@ -4,11 +4,15 @@ This GitHub is the official PyTorch implementation of the technique: AutoJoin
 
 ## Data
 
-All data used is publicly available; however, a GDrive link has been provided to all of the data necessary for training and evaluating on the Sully dataset. 
+All data used is publicly available; however, a GDrive link has been provided to all of the data necessary for training and evaluating on the Sully and Waymo datasets. 
 
+Sully:
 https://drive.google.com/file/d/1JYDZ0szXORLlMM8B17kwJg2OyyqqLiZm/view?usp=sharing
 
-Should this link expire, then creating an issue or sending me an email directly will work and I'll fix it.
+Waymo:
+https://drive.google.com/file/d/1HrSmX-0Xa73iCMaMYqVcMd0Tdk_rvFxz/view?usp=sharing
+
+Should these links expire, then create an issue or send an email, and I will fix it.
 
 After downloading the data, unzip it, and place it into the data folder. That should be it for the data.
 
