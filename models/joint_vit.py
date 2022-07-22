@@ -4,6 +4,8 @@ import torch.nn.functional as F
 from vit_pytorch import ViT
 from vit_pytorch import SimpleViT
 
+from vit_pytorch.crossformer import CrossFormer
+
 import timm
 from functools import partial
 from timm.models.vision_transformer import VisionTransformer, _cfg
@@ -39,23 +41,31 @@ class EncoderViT(nn.Module):
         #         )  
 
         # This is ViT-Micro settings
-        self.regressor = ViT(
-                    image_size=int(args.img_dim),
-                    patch_size=16,
-                    num_classes=50,
-                    dim=128,
-                    depth=6,
-                    heads=3,
-                    mlp_dim=512,
-                    dropout=0.1,
-                    emb_dropout=0.1
-                )      
+        # self.regressor = ViT(
+        #             image_size=int(args.img_dim),
+        #             patch_size=16,
+        #             num_classes=50,
+        #             dim=128,
+        #             depth=6,
+        #             heads=3,
+        #             mlp_dim=512,
+        #             dropout=0.1,
+        #             emb_dropout=0.1
+        #         )   
+
+        self.encoder = CrossFormer(
+            num_classes = 50,                # number of output classes
+            dim = (64, 128, 256, 512),         # dimension at each stage
+            depth = (2, 2, 8, 2),              # depth of transformer at each stage
+            global_window_size = (8, 4, 2, 1), # global window sizes at each stage
+            local_window_size = 7,             # local window size (can be customized for each stage, but in paper, held constant at 7 for all stages)
+        )   
         
         # self.regressor = deit_small_patch16_224(pretrained=True)
         
 
     def forward(self, x):
-        x = self.regressor(x)
+        x = self.encoder(x)
         # print(x.shape)
         
         return x
