@@ -246,6 +246,7 @@ class PipelineJoint:
                 angle_batch = torch.unsqueeze(angle_batch, 1)     
 
                 noise_batch, clean_batch, angle_batch = noise_batch.to(self.device), clean_batch.to(self.device), angle_batch.to(self.device)
+                
                 # Passing it through model
                 z = self.encoder(noise_batch)
 
@@ -256,8 +257,7 @@ class PipelineJoint:
                 regr_loss = self.regr_loss(sa_batch, angle_batch)
 
                 # 1st forward-backward pass for SAM
-                # loss = (self.lambda1 * recon_loss) + (self.lambda2 * regr_loss) 
-                loss = (self.lambda2 * regr_loss) 
+                loss = (self.lambda1 * recon_loss) + (self.lambda2 * regr_loss) 
                 loss.backward()
                 self.optimizer.first_step(zero_grad=True)
 
@@ -267,12 +267,11 @@ class PipelineJoint:
                 recon_batch = self.decoder(z)
                 sa_batch = self.regressor(z)
 
-                recon_loss = self.recon_loss(recon_batch, clean_batch)
-                regr_loss = self.regr_loss(sa_batch, angle_batch)
+                recon_loss_2nd = self.recon_loss(recon_batch, clean_batch)
+                regr_loss_2nd = self.regr_loss(sa_batch, angle_batch)
 
                 # 2nd forward-backward pass for SAM
-                # ((self.lambda1 * recon_loss) + (self.lambda2 * regr_loss)).backward()
-                ((self.lambda2 * regr_loss)).backward() 
+                ((self.lambda1 * recon_loss_2nd) + (self.lambda2 * regr_loss_2nd)).backward()
                 self.optimizer.second_step(zero_grad=True)
 
                 # self.optimizer.zero_grad()
@@ -426,8 +425,8 @@ class PipelineJoint:
                 recon_loss = self.recon_loss(recon_batch, clean_batch)
                 regr_loss = self.regr_loss(sa_batch, angle_batch)
 
-                # loss = (self.lambda1 * recon_loss)  + (self.lambda2 * regr_loss)
-                loss = (self.lambda2 * regr_loss) 
+                loss = (self.lambda1 * recon_loss)  + (self.lambda2 * regr_loss)
+                # loss = (self.lambda2 * regr_loss) 
 
                 val_batch_loss += loss.item()
                 val_batch_recon_loss += (self.lambda1 * recon_loss.item())
