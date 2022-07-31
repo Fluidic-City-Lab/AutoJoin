@@ -1,3 +1,6 @@
 data/sully/
+data/waymo/
 results/
 testing/
+testing_sully/
+testing_waymo/
