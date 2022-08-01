@@ -258,7 +258,7 @@ class PipelineJoint:
 
                 recon_loss = self.recon_loss(recon_batch, clean_batch) # Unsupervised loss
                 regr_loss = self.regr_loss(sa_batch, angle_batch) # Supervised loss
-                recon_regr_loss = self.regr_loss(sa_batch, sa_recon_batch)
+                recon_regr_loss = self.regr_loss(sa_batch, sa_recon_batch) # Supervised loss
 
                 loss = (self.lambda1 * recon_loss) + (self.lambda2 * regr_loss) + (self.lambda3 * recon_regr_loss) 
 
