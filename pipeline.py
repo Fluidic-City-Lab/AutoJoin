@@ -58,6 +58,7 @@ class PipelineJoint:
 
             self.lambda1 = self.args.lambda1
             self.lambda2 = self.args.lambda2
+            self.lambda3 = self.args.lambda3
 
             print(f"HYPERPARAMETERS\n------------------------")
             print(f"Train batch_size: {self.batch_size}")
@@ -444,7 +445,7 @@ class PipelineJoint:
         avg_val_batch_loss = round(val_batch_loss / len(val_dataloader), 3)
         avg_val_batch_recon_loss = round(val_batch_recon_loss / len(val_dataloader), 3)
         avg_val_batch_reg_loss = round(val_batch_reg_loss / len(val_dataloader), 3)
-        avg_val_batch_reg_recon_loss = round(avg_val_batch_reg_recon_loss / len(val_dataloader), 3)
+        avg_val_batch_reg_recon_loss = round(val_batch_reg_recon_loss / len(val_dataloader), 3)
 
         ma_val = ma(preds_val, gt_val)
 
