@@ -58,6 +58,7 @@ class PipelineJoint:
 
             self.lambda1 = self.args.lambda1
             self.lambda2 = self.args.lambda2
+            self.lambda3 = self.args.lambda3
 
             print(f"HYPERPARAMETERS\n------------------------")
             print(f"Train batch_size: {self.batch_size}")
@@ -221,6 +222,7 @@ class PipelineJoint:
             train_batch_loss = 0
             train_batch_recon_loss = 0
             train_batch_reg_loss = 0
+            train_batch_reg_recon_loss = 0
 
             # Below two arrays are used for calculing Mean Accuracy during training
             gt_train = [] 
@@ -405,6 +407,7 @@ class PipelineJoint:
         val_batch_loss = 0
         val_batch_recon_loss = 0
         val_batch_reg_loss = 0
+        val_batch_reg_recon_loss = 0
 
         gt_val = []
         preds_val = []
@@ -434,7 +437,7 @@ class PipelineJoint:
                 val_batch_loss += loss.item()
                 val_batch_recon_loss += (self.lambda1 * recon_loss.item())
                 val_batch_reg_loss += (self.lambda2 * regr_loss.item())
-                val_batch_reg_recon_loss += (self.lambda3 * recon_regr_loss)
+                val_batch_reg_recon_loss += (self.lambda3 * recon_regr_loss.item())
 
                 preds_val.extend(sa_batch.cpu().detach().numpy())
 
@@ -442,7 +445,7 @@ class PipelineJoint:
         avg_val_batch_loss = round(val_batch_loss / len(val_dataloader), 3)
         avg_val_batch_recon_loss = round(val_batch_recon_loss / len(val_dataloader), 3)
         avg_val_batch_reg_loss = round(val_batch_reg_loss / len(val_dataloader), 3)
-        avg_val_batch_reg_recon_loss = round(avg_val_batch_reg_recon_loss / len(val_dataloader), 3)
+        avg_val_batch_reg_recon_loss = round(val_batch_reg_recon_loss / len(val_dataloader), 3)
 
         ma_val = ma(preds_val, gt_val)
 
