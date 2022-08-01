@@ -222,7 +222,7 @@ class TestDriveDataset(Dataset):
                 print(img_path, " not exists")
 
             img = Image.open(img_path)
-            img = np.asarray(img)
+            img = np.asarray(img).copy()
             img = self.perturb(img)
             img = np.moveaxis(img, 0, -1) 
             img = Image.fromarray(np.uint8(img), "RGB")
