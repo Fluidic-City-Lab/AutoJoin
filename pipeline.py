@@ -131,10 +131,12 @@ class PipelineJoint:
             self.train_loss_collector = np.zeros(self.train_epochs)
             self.train_recon_loss_collector = np.zeros(self.train_epochs)
             self.train_reg_loss_collector = np.zeros(self.train_epochs)
+            self.train_reg_recon_loss_collector = np.zeros(self.train_epochs)
 
             self.val_loss_collector = np.zeros(self.train_epochs)
             self.val_recon_loss_collector = np.zeros(self.train_epochs)
             self.val_reg_loss_collector = np.zeros(self.train_epochs)
+            self.val_reg_recon_loss_collector = np.zeros(self.train_epochs)
 
             if self.args.load == "true":
                 checkpoint = torch.load(f'{self.args.logs_dir}/{self.args.checkpoints_dir}/checkpoint.pt')
@@ -152,10 +154,12 @@ class PipelineJoint:
                 self.train_loss_collector = checkpoint["train_loss_collector"]
                 self.train_recon_loss_collector = checkpoint["train_recon_loss_collector"]
                 self.train_reg_loss_collector = checkpoint["train_reg_loss_collector"]
+                self.train_reg_recon_loss_collector = checkpoint["train_reg_recon_loss_collector"]
 
                 self.val_loss_collector = checkpoint["val_loss_collector"]
                 self.val_recon_loss_collector = checkpoint["val_recon_loss_collector"]
                 self.val_reg_loss_collector = checkpoint["val_reg_loss_collector"]
+                self.val_reg_recon_loss_collector = checkpoint["val_reg_recon_loss_collector"]
 
         else:
             self.test_perturb = test_perturb
@@ -242,16 +246,19 @@ class PipelineJoint:
                 angle_batch = torch.unsqueeze(angle_batch, 1)     
 
                 noise_batch, clean_batch, angle_batch = noise_batch.to(self.device), clean_batch.to(self.device), angle_batch.to(self.device)
+                
                 # Passing it through model
                 z = self.encoder(noise_batch)
 
                 recon_batch = self.decoder(z)
                 sa_batch = self.regressor(z)
+                sa_recon_batch = self.regressor(self.encoder(recon_batch))
 
                 recon_loss = self.recon_loss(recon_batch, clean_batch) # Unsupervised loss
                 regr_loss = self.regr_loss(sa_batch, angle_batch) # Supervised loss
+                recon_regr_loss = self.regr_loss(sa_batch, sa_recon_batch)
 
-                loss = (self.lambda1 * recon_loss) + (self.lambda2 * regr_loss) 
+                loss = (self.lambda1 * recon_loss) + (self.lambda2 * regr_loss) + (self.lambda3 * recon_regr_loss) 
 
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -260,27 +267,31 @@ class PipelineJoint:
                 train_batch_loss += loss.item()
                 train_batch_recon_loss += (self.lambda1 * recon_loss.item())
                 train_batch_reg_loss += (self.lambda2 * regr_loss.item())
+                train_batch_reg_recon_loss += (self.lambda3 * recon_regr_loss.item())
 
                 preds_train.extend(sa_batch.cpu().detach().numpy())
             
             avg_train_batch_loss = round(train_batch_loss / len(self.train_dataloader), 3)
             avg_train_batch_recon_loss = round(train_batch_recon_loss / len(self.train_dataloader), 3)
             avg_train_batch_reg_loss = round(train_batch_reg_loss / len(self.train_dataloader), 3)
+            avg_train_batch_reg_recon_loss = round(train_batch_reg_recon_loss / len(self.train_dataloader), 3)
 
             ma_train = ma(preds_train, gt_train)
 
             val_tuple = self.validate(self.val_dataloader)
             avg_val_batch_loss = val_tuple[0]
-            ma_val = val_tuple[3]
+            ma_val = val_tuple[4]
 
             # Saving epoch train and val loss to their respective collectors
             self.train_loss_collector[ep] = avg_train_batch_loss
             self.train_recon_loss_collector[ep] = avg_train_batch_recon_loss
             self.train_reg_loss_collector[ep] = avg_train_batch_reg_loss
+            self.train_reg_recon_loss_collector[ep] = avg_train_batch_reg_recon_loss
 
             self.val_loss_collector[ep] = avg_val_batch_loss
             self.val_recon_loss_collector[ep] = val_tuple[1]
             self.val_reg_loss_collector[ep] = val_tuple[2]
+            self.val_reg_recon_loss_collector[ep] = val_tuple[3]
 
             end_time = time.time()
             epoch_time = end_time - start_time
@@ -316,9 +327,11 @@ class PipelineJoint:
                     "train_loss_collector": self.train_loss_collector,
                     "train_recon_loss_collector": self.train_recon_loss_collector,
                     "train_reg_loss_collector": self.train_reg_loss_collector,
+                    "train_reg_recon_loss_collector": self.train_reg_recon_loss_collector,
                     "val_loss_collector": self.val_loss_collector,
                     "val_recon_loss_collector": self.val_recon_loss_collector,
-                    "val_reg_loss_collector": self.val_reg_loss_collector
+                    "val_reg_loss_collector": self.val_reg_loss_collector,
+                    "val_reg_recon_loss_collector": self.val_reg_recon_loss_collector
                 }, f'{self.args.logs_dir}/{self.args.checkpoints_dir}/checkpoint_best_loss.pt')
 
                 if self.train_dataset.get_curr_max() < 0.99:
@@ -337,9 +350,11 @@ class PipelineJoint:
                     "train_loss_collector": self.train_loss_collector,
                     "train_recon_loss_collector": self.train_recon_loss_collector,
                     "train_reg_loss_collector": self.train_reg_loss_collector,
+                    "train_reg_recon_loss_collector": self.train_reg_recon_loss_collector,
                     "val_loss_collector": self.val_loss_collector,
                     "val_recon_loss_collector": self.val_recon_loss_collector,
-                    "val_reg_loss_collector": self.val_reg_loss_collector
+                    "val_reg_loss_collector": self.val_reg_loss_collector,
+                    "val_reg_recon_loss_collector": self.val_reg_recon_loss_collector
                 }, f'{self.args.logs_dir}/{self.args.checkpoints_dir}/checkpoint.pt')
  
         print("\nFinished Training!\n")
@@ -351,7 +366,7 @@ class PipelineJoint:
         ax.plot(np.array(self.train_loss_collector))
         ax.plot(np.array(self.val_loss_collector))
         ax.set_xticks(xticks) 
-        ax.legend(["Training (MSE)", "Validation (MSE)"])
+        ax.legend(["Training", "Validation"])
         fig.savefig(f'{self.args.logs_dir}/training_graph.png')
 
         fig, ax = plt.subplots(figsize=(16,5), dpi=200)
@@ -369,9 +384,17 @@ class PipelineJoint:
         ax.plot(np.array(self.train_reg_loss_collector))
         ax.plot(np.array(self.val_reg_loss_collector))
         ax.set_xticks(xticks) 
-        ax.legend(["Training (MSE)", "Validation (MSE)"])
+        ax.legend(["Training (MAE)", "Validation (MAE)"])
         fig.savefig(f'{self.args.logs_dir}/training_graph_reg.png')
 
+        fig, ax = plt.subplots(figsize=(16,5), dpi=200)
+        xticks= np.arange(0,self.train_epochs,5)
+        ax.set_ylabel("Avg. Loss") 
+        ax.plot(np.array(self.train_reg_recon_loss_collector))
+        ax.plot(np.array(self.val_reg_recon_loss_collector))
+        ax.set_xticks(xticks) 
+        ax.legend(["Training (MSE)", "Validation (MSE)"])
+        fig.savefig(f'{self.args.logs_dir}/training_graph_reg.png')
     
     # Function that validates the current model on the validation set of images
     def validate(self, val_dataloader):
@@ -400,15 +423,18 @@ class PipelineJoint:
 
                 recon_batch = self.decoder(z)
                 sa_batch = self.regressor(z)
-                
+                sa_recon_batch = self.regressor(self.encoder(recon_batch))
+
                 recon_loss = self.recon_loss(recon_batch, clean_batch)
                 regr_loss = self.regr_loss(sa_batch, angle_batch)
+                recon_regr_loss = self.regr_loss(sa_batch, sa_recon_batch)
 
-                loss = (self.lambda1 * recon_loss)  + (self.lambda2 * regr_loss)
+                loss = (self.lambda1 * recon_loss) + (self.lambda2 * regr_loss) + (self.lambda3 * recon_regr_loss) 
 
                 val_batch_loss += loss.item()
                 val_batch_recon_loss += (self.lambda1 * recon_loss.item())
                 val_batch_reg_loss += (self.lambda2 * regr_loss.item())
+                val_batch_reg_recon_loss += (self.lambda3 * recon_regr_loss)
 
                 preds_val.extend(sa_batch.cpu().detach().numpy())
 
@@ -416,10 +442,11 @@ class PipelineJoint:
         avg_val_batch_loss = round(val_batch_loss / len(val_dataloader), 3)
         avg_val_batch_recon_loss = round(val_batch_recon_loss / len(val_dataloader), 3)
         avg_val_batch_reg_loss = round(val_batch_reg_loss / len(val_dataloader), 3)
+        avg_val_batch_reg_recon_loss = round(avg_val_batch_reg_recon_loss / len(val_dataloader), 3)
 
         ma_val = ma(preds_val, gt_val)
 
-        return (avg_val_batch_loss, avg_val_batch_recon_loss, avg_val_batch_reg_loss, ma_val)
+        return (avg_val_batch_loss, avg_val_batch_recon_loss, avg_val_batch_reg_loss, avg_val_batch_reg_recon_loss, ma_val)
 
     def test_other(self):
         # other_method = Nvidia().to(self.device)
