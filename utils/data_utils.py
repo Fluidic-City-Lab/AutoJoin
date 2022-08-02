@@ -57,6 +57,50 @@ class TrainDriveDataset(Dataset):
         self.curriculum_max = cv
 
 
+class TrainDriveDatasetNP(Dataset):
+    def __init__(self, args, x, y):
+        self.args = args
+        
+        self.x = x # numpy array of images
+        self.y = y # steering angles of images
+
+        if self.args.img_dim:
+            img_dim = int(args.img_dim)
+            self.transform = T.Compose(
+                [T.Resize((img_dim,img_dim)) ,
+                T.ToTensor()]
+            )
+        else:
+            self.transform = T.Compose(
+                [T.ToTensor()]
+            )
+
+        self.curriculum_max = 0
+
+    def __len__(self):
+        return len(self.y)
+
+    def __getitem__(self, key):
+        img = self.x[key]
+        label = self.y[key]
+
+        img = Image.fromarray(img).convert("RGB")
+        # img = np.asarray(img)
+        img = self.transform(img)
+
+        # Correct datatype here
+        return [img, label.astype(np.float32)]
+    
+    def increase_curr_max(self):
+        self.curriculum_max += 0.1
+    
+    def get_curr_max(self):
+        return self.curriculum_max
+    
+    def set_curr_max(self, cv):
+        self.curriculum_max = cv
+        
+
 class TestDriveDataset(Dataset):
     def __init__(self, args, x, y, test_perturb, test_num):
         self.args = args
@@ -222,7 +266,7 @@ class TestDriveDataset(Dataset):
                 print(img_path, " not exists")
 
             img = Image.open(img_path)
-            img = np.asarray(img)
+            img = np.asarray(img).copy()
             img = self.perturb(img)
             img = np.moveaxis(img, 0, -1) 
             img = Image.fromarray(np.uint8(img), "RGB")

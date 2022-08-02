@@ -15,7 +15,7 @@ import numpy as np
 from models.joint_vit import DecoderViT, EncoderViT, RegressorViT
 
 
-from utils.data_utils import TrainDriveDataset, TestDriveDataset
+from utils.data_utils import TrainDriveDataset, TrainDriveDatasetNP, TestDriveDataset
 from utils.generate_augs import generate_augmentations_batch
 from utils.error_metrics import mae, ma, rmse
 
@@ -66,25 +66,34 @@ class PipelineJoint:
 
             
             # This is for loading the data from image files (like png/jpg/etc.)
-            label_path_train = os.path.join(self.args.data_dir, f"{self.args.dataset}", "labels_train.csv")
+            # label_path_train = os.path.join(self.args.data_dir, f"{self.args.dataset}", "labels_train.csv")
 
-            x = []
-            y = []
+            # x = []
+            # y = []
 
-            with open(label_path_train, 'r') as csvfile:
-                csvreader = csv.reader(csvfile)
+            # with open(label_path_train, 'r') as csvfile:
+            #     csvreader = csv.reader(csvfile)
                 
-                for row in csvreader:
-                    x.append(str(row[0][:-4]))
-                    y.append(float(row[-1]))
+            #     for row in csvreader:
+            #         x.append(str(row[0][:-4]))
+            #         y.append(float(row[-1]))
         
-            x = np.array(x)
-            y = np.array(y)
+            # x = np.array(x)
+            # y = np.array(y)
 
-            x_train, x_val, y_train, y_val = train_test_split(x, y, test_size=0.1, random_state=42)
+            # x_train, x_val, y_train, y_val = train_test_split(x, y, test_size=0.1, random_state=42)
 
-            self.train_dataset = TrainDriveDataset(args, x_train, y_train)
-            self.val_dataset = TrainDriveDataset(args, x_val, y_val)
+            # self.train_dataset = TrainDriveDataset(args, x_train, y_train)
+            # self.val_dataset = TrainDriveDataset(args, x_val, y_val)
+
+            train = np.load(f"./data/{self.args.dataset}/train_{self.args.dataset}.npz")
+            val = np.load(f"./data/{self.args.dataset}/val_{self.args.dataset}.npz")
+
+            x_train, y_train = train["train_input_images"], train["train_target_angles"]
+            x_val, y_val = val["val_input_images"], val["val_target_angles"]
+
+            self.train_dataset = TrainDriveDatasetNP(args, x_train, y_train)
+            self.val_dataset = TrainDriveDatasetNP(args, x_val, y_val)
             
             self.train_dataloader = DataLoader(dataset=self.train_dataset,
                                                 batch_size=self.batch_size,
@@ -156,6 +165,9 @@ class PipelineJoint:
                 self.val_loss_collector = checkpoint["val_loss_collector"]
                 self.val_recon_loss_collector = checkpoint["val_recon_loss_collector"]
                 self.val_reg_loss_collector = checkpoint["val_reg_loss_collector"]
+            
+            self.train_dataset.set_curr_max(1)
+            self.val_dataset.set_curr_max(1)
 
         else:
             self.test_perturb = test_perturb

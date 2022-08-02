@@ -113,7 +113,7 @@ if __name__ == "__main__":
     parser.add_argument("--load", default="false")
     parser.add_argument("--run_mode", default="train", choices=["train", "test_autojoin", "test_others"])
     parser.add_argument("--img_dim", type=int, default=None)
-    parser.add_argument("--lambda1", type=int, default=10)
-    parser.add_argument("--lambda2", type=int, default=1)
+    parser.add_argument("--lambda1", type=int, default=1)
+    parser.add_argument("--lambda2", type=int, default=10)
 
     main(parser.parse_args())
