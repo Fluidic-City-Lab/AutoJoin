@@ -122,8 +122,8 @@ class PipelineJoint:
             print(self.encoder)
             print(self.regressor)
 
-            self.recon_loss = SSIM(data_range=1, size_average=True, channel=3)
-            # self.recon_loss = nn.MSELoss()
+            # self.recon_loss = SSIM(data_range=1, size_average=True, channel=3)
+            self.recon_loss = nn.MSELoss()
             self.regr_loss = nn.L1Loss()
         
             self.params = list(self.encoder.parameters()) + list(self.regressor.parameters()) + list(self.decoder.parameters())
@@ -262,7 +262,8 @@ class PipelineJoint:
                 regr_loss = self.regr_loss(sa_batch, angle_batch) # Supervised loss
                 recon_regr_loss = self.regr_loss(sa_batch, sa_recon_batch) # Supervised loss
 
-                loss = (self.lambda1 * (1 - recon_loss)) + (self.lambda2 * regr_loss) # + (self.lambda3 * recon_regr_loss) 
+                # loss = (self.lambda1 * (1 - recon_loss)) + (self.lambda2 * regr_loss) # + (self.lambda3 * recon_regr_loss) 
+                loss = (self.lambda1 * recon_loss) + (self.lambda2 * regr_loss)
 
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -434,7 +435,8 @@ class PipelineJoint:
                 regr_loss = self.regr_loss(sa_batch, angle_batch)
                 recon_regr_loss = self.regr_loss(sa_batch, sa_recon_batch)
 
-                loss = (self.lambda1 * (1 - recon_loss)) + (self.lambda2 * regr_loss) # + (self.lambda3 * recon_regr_loss) 
+                # loss = (self.lambda1 * (1 - recon_loss)) + (self.lambda2 * regr_loss) # + (self.lambda3 * recon_regr_loss) 
+                loss = (self.lambda1 * recon_loss) + (self.lambda2 * regr_loss)
 
                 val_batch_loss += loss.item()
                 val_batch_recon_loss += (self.lambda1 * recon_loss.item())
