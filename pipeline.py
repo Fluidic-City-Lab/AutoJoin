@@ -170,6 +170,9 @@ class PipelineJoint:
                 self.val_recon_loss_collector = checkpoint["val_recon_loss_collector"]
                 self.val_reg_loss_collector = checkpoint["val_reg_loss_collector"]
                 self.val_reg_recon_loss_collector = checkpoint["val_reg_recon_loss_collector"]
+            
+            self.train_dataset.set_curr_max(1)
+            self.val_dataset.set_curr_max(1)
 
         else:
             self.test_perturb = test_perturb
@@ -263,16 +266,14 @@ class PipelineJoint:
 
                 recon_batch = self.decoder(z)
                 sa_batch = self.regressor(z)
-                # sa_recon_batch = self.regressor(self.encoder(recon_batch))
-                sa_recon_batch = 0
-
+                sa_recon_batch = self.regressor(self.encoder(recon_batch))
+                
                 recon_loss = self.recon_loss(recon_batch, clean_batch) # Unsupervised loss
                 regr_loss = self.regr_loss(sa_batch, angle_batch) # Supervised loss
-                # recon_regr_loss = self.regr_loss(sa_batch, sa_recon_batch) # Supervised loss
-                recon_regr_loss = 0.
-
-                # loss = (self.lambda1 * recon_loss) + (self.lambda2 * regr_loss) + (self.lambda3 * recon_regr_loss) 
-                loss = (self.lambda1 * recon_loss) + (self.lambda2 * regr_loss)
+                recon_regr_loss = self.regr_loss(sa_recon_batch, angle_batch) # Supervised loss
+                
+                loss = (self.lambda1 * recon_loss) + (self.lambda2 * regr_loss) + (self.lambda3 * recon_regr_loss) 
+                # loss = (self.lambda1 * recon_loss) + (self.lambda2 * regr_loss)
 
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -281,7 +282,7 @@ class PipelineJoint:
                 train_batch_loss += loss.item()
                 train_batch_recon_loss += (self.lambda1 * recon_loss.item())
                 train_batch_reg_loss += (self.lambda2 * regr_loss.item())
-                train_batch_reg_recon_loss += (self.lambda3 * 0)
+                train_batch_reg_recon_loss += (self.lambda3 * recon_regr_loss.item())
 
                 preds_train.extend(sa_batch.cpu().detach().numpy())
             
@@ -438,21 +439,19 @@ class PipelineJoint:
 
                 recon_batch = self.decoder(z)
                 sa_batch = self.regressor(z)
-                # sa_recon_batch = self.regressor(self.encoder(recon_batch))
-                sa_recon_batch = 0
-
+                sa_recon_batch = self.regressor(self.encoder(recon_batch))
+                
                 recon_loss = self.recon_loss(recon_batch, clean_batch)
                 regr_loss = self.regr_loss(sa_batch, angle_batch)
-                # recon_regr_loss = self.regr_loss(sa_batch, sa_recon_batch)
-                recon_regr_loss = 0.
+                recon_regr_loss = self.regr_loss(sa_recon_batch, angle_batch)
 
-                # loss = (self.lambda1 * recon_loss) + (self.lambda2 * regr_loss) + (self.lambda3 * recon_regr_loss) 
-                loss = (self.lambda1 * recon_loss) + (self.lambda2 * regr_loss)
+                loss = (self.lambda1 * recon_loss) + (self.lambda2 * regr_loss) + (self.lambda3 * recon_regr_loss) 
+                # loss = (self.lambda1 * recon_loss) + (self.lambda2 * regr_loss)
 
                 val_batch_loss += loss.item()
                 val_batch_recon_loss += (self.lambda1 * recon_loss.item())
                 val_batch_reg_loss += (self.lambda2 * regr_loss.item())
-                val_batch_reg_recon_loss += (self.lambda3 * 0)
+                val_batch_reg_recon_loss += (self.lambda3 * recon_regr_loss.item())
 
                 preds_val.extend(sa_batch.cpu().detach().numpy())
 
