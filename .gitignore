@@ -8,3 +8,6 @@ testing_sully/
 testing_waymo/
 testing_audi/
 testing_honda/
+
+__pycache__/
+__pycache__/*
