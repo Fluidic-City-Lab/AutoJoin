@@ -491,8 +491,8 @@ class PipelineJoint:
 
     def test_our_approach(self):
         if self.args.model == "resnet":
-            encoder = EncoderRN50().to(self.device)
-            regressor = RegressorRN50().to(self.device)
+            encoder = EncoderRN50([3, 4, 6, 3], 3, 1).to(self.device)
+            regressor = RegressorRN50([3, 4, 6, 3], 3, 1).to(self.device)
         elif self.args.model == "nvidia":
             encoder = EncoderNvidia().to(self.device)
             regressor = RegressorNvidia().to(self.device)
