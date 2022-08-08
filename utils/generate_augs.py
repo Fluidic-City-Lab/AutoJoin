@@ -258,10 +258,10 @@ def generate_augmentations_batch(image_batch, curriculum_max):
     # Augmenting the images with single perturbations
     for i in range(len(image_batch)):
         image = image_batch[i]
-        # intensity = np.random.uniform(high=curriculum_max)
+        intensity = np.random.uniform(high=curriculum_max)
         
         # Static Intensities 
-        intensity = random.choice([0.02, 0.2, 0.5, 0.65, 1.0])
+        # intensity = random.choice([0.02, 0.2, 0.5, 0.65, 1.0])
 
         if i % len(methods) == 0:
             random.shuffle(methods)
