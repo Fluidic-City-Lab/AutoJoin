@@ -15,7 +15,7 @@ import numpy as np
 from models.joint_vit import DecoderViT, EncoderViT, RegressorViT
 
 
-from utils.data_utils import TrainDriveDataset, TestDriveDataset
+from utils.data_utils import TrainDriveDataset, TrainDriveDatasetNP, TestDriveDataset
 from utils.generate_augs import generate_augmentations_batch
 from utils.error_metrics import mae, ma, rmse
 from utils.sam import SAM

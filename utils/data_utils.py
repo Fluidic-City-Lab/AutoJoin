@@ -56,6 +56,203 @@ class TrainDriveDataset(Dataset):
     def set_curr_max(self, cv):
         self.curriculum_max = cv
 
+class TrainDriveDatasetNP(Dataset):
+    def __init__(self, args, x, y):
+        self.args = args
+        
+        self.x = x # numpy array of images
+        self.y = y # steering angles of images
+
+        if self.args.img_dim:
+            img_dim = int(args.img_dim)
+            self.transform = T.Compose(
+                [T.Resize((img_dim,img_dim)) ,
+                T.ToTensor()]
+            )
+        else:
+            self.transform = T.Compose(
+                [T.ToTensor()]
+            )
+
+        self.curriculum_max = 0
+
+    def __len__(self):
+        return len(self.y)
+
+    def __getitem__(self, key):
+        img = self.x[key]
+        label = self.y[key]
+
+        img = Image.fromarray(img).convert("RGB")
+        # img = np.asarray(img)
+        img = self.transform(img)
+
+        # Correct datatype here
+        return [img, label.astype(np.float32)]
+    
+    def increase_curr_max(self):
+        self.curriculum_max += 0.1
+    
+    def get_curr_max(self):
+        return self.curriculum_max
+    
+    def set_curr_max(self, cv):
+        self.curriculum_max = cv
+
+# Just going to assume that this class uses npz files. If using images, then see first class for example
+class TrainDriveDatasetPerturb(Dataset):
+    def __init__(self, args, x, y):
+        self.args = args
+        
+        self.x = x # numpy array of images
+        self.y = y # steering angles of images
+
+        if self.args.img_dim:
+            img_dim = int(args.img_dim)
+            self.transform = T.Compose(
+                [T.Resize((img_dim,img_dim)) ,
+                T.ToTensor()]
+            )
+        else:
+            self.transform = T.Compose(
+                [T.ToTensor()]
+            )
+
+        self.curriculum_max = 0
+        self.i = 0
+        self.methods = [self.perturb_brightness, self.perturb_contrast, self.perturb_saturation,
+                        self.perturb_hue, self.perturb_noise, self.perturb_blur, self.perturb_distort]
+        
+
+    def __len__(self):
+        return len(self.y)
+
+    def __getitem__(self, key):
+        img = self.x[key]
+        label = self.y[key]
+
+        clean_img = img.copy()
+        clean_img = self.transform(clean_img)
+
+        if self.i % len(self.methods) == 0:
+            random.shuffle(self.methods)
+    
+        perturbation = self.methods[self.i%len(self.methods)]
+        noise_img = perturbation(img)
+
+        self.increase_i()
+
+        return [clean_img, noise_img, label.astype(np.float32)]
+    
+    def increase_curr_max(self):
+        self.curriculum_max += 0.1
+    
+    def get_curr_max(self):
+        return self.curriculum_max
+    
+    def set_curr_max(self, cv):
+        self.curriculum_max = cv
+    
+    def increase_i(self):
+        self.i += 1
+
+    def perturb_noise(self, img):
+        intensity = np.random.uniform(high=self.curriculum_max)
+        noise_level = int(intensity * (200 - 20) + 20)
+
+        def add_noise(image, sigma):
+            row,col,ch= image.shape
+            mean = 0
+            gauss = np.random.normal(mean,sigma,(row,col,ch))
+            gauss = gauss.reshape(row,col,ch)
+            noisy = image + gauss
+            noisy = np.float32(noisy)
+            return noisy
+
+        img = np.uint8(add_noise(img, noise_level))
+        img = Image.fromarray(img).convert("RGB")
+        img = self.transform(img)
+
+        return img
+
+    def perturb_blur(self, img):
+        intensity = np.random.uniform(high=self.curriculum_max)
+        blur_level = int(intensity * (107 - 7) + 7)
+        if blur_level % 2 == 0: # blur has to be an odd number
+            blur_level += 1
+        
+        img = np.uint8(cv2.GaussianBlur(img, (blur_level, blur_level), 0))
+        img = Image.fromarray(img).convert("RGB")
+        img = self.transform(img)
+
+        return img
+
+    def perturb_distort(self, img):
+        intensity = np.random.uniform(high=self.curriculum_max)
+        distort_level = int(intensity * (500 - 1) + 1)
+
+        K = np.eye(3)*1000
+        K[0,2] = img.shape[1]/2
+        K[1,2] = img.shape[0]/2
+        K[2,2] = 1
+
+        img = np.uint8(cv2.undistort(img, K, np.array([distort_level,distort_level,0,0])))
+        img = Image.fromarray(img).convert("RGB")
+        img = self.transform(img)
+
+        return img
+
+    def perturb_brightness(self, img):
+        img = Image.fromarray(img).convert("RGB")
+
+        brightness = T.ColorJitter(brightness=(0,1),
+                                    contrast=(0,0),
+                                    saturation=(0,0),
+                                    hue=(0,0))
+
+        img = brightness(img)
+        img = self.transform(img)
+
+        return img
+
+    def perturb_contrast(self, img):
+        img = Image.fromarray(img).convert("RGB")
+
+        contrast = T.ColorJitter(brightness=(0,0),
+                                    contrast=(0,1),
+                                    saturation=(0,0),
+                                    hue=(0,0))
+
+        img = contrast(img)
+        img = self.transform(img)
+
+        return img
+
+    def perturb_saturation(self, img):
+        img = Image.fromarray(img).convert("RGB")
+
+        saturation = T.ColorJitter(brightness=(0,0),
+                                    contrast=(0,0),
+                                    saturation=(0,1),
+                                    hue=(0,0))
+
+        img = saturation(img)
+        img = self.transform(img)
+
+        return img
+
+    def perturb_hue(self, img):
+        img = Image.fromarray(img).convert("RGB")
+
+        hue = T.ColorJitter(brightness=(0,0),
+                            contrast=(0,0),
+                            saturation=(0,0),
+                            hue=(-0.5, 0.5))
+
+        img = hue(img)
+        img = self.transform(img)
+
+        return img
 
 class TestDriveDataset(Dataset):
     def __init__(self, args, x, y, test_perturb, test_num):
