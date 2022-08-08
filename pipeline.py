@@ -15,7 +15,7 @@ import numpy as np
 from models.joint_vit import DecoderViT, EncoderViT, RegressorViT
 
 
-from utils.data_utils import TrainDriveDataset, TrainDriveDatasetNP, TestDriveDataset
+from utils.data_utils import TrainDriveDataset, TrainDriveDatasetNP, TestDriveDataset, TrainDriveDatasetPerturb
 from utils.generate_augs import generate_augmentations_batch
 from utils.error_metrics import mae, ma, rmse
 
@@ -131,7 +131,7 @@ class PipelineJoint:
 
             self.recon_loss = nn.MSELoss()
             self.regr_loss = nn.L1Loss()
-        
+
             self.params = list(self.encoder.parameters()) + list(self.regressor.parameters()) + list(self.decoder.parameters())
             self.optimizer = torch.optim.Adam(self.params, lr=self.lr)
             self.load_epoch = 0
@@ -235,25 +235,31 @@ class PipelineJoint:
             preds_train = []
 
             for bi, data in enumerate(tqdm(self.train_dataloader)):
-                clean_batch, angle_batch = data
+                if not isinstance(self.train_dataset, TrainDriveDatasetPerturb):
+                    clean_batch, angle_batch = data
+
+                    clean_batch = clean_batch.numpy()
+                    clean_batch = clean_batch * 255.
+                    clean_batch = np.uint8(clean_batch) # Images need to be uint8 for cv2 when doing the augmentations
+                    clean_batch = np.moveaxis(clean_batch, 1, -1)
+                    
+                    noise_batch = generate_augmentations_batch(clean_batch, self.train_dataset.get_curr_max())
+                    
+                    noise_batch = noise_batch / 255.
+                    clean_batch = clean_batch / 255.
+
+                    clean_batch = np.moveaxis(clean_batch, -1, 1)
+                    noise_batch = torch.tensor(noise_batch, dtype=torch.float32)
+                    clean_batch = torch.tensor(clean_batch, dtype=torch.float32)   
+
+                else:
+                    clean_batch, noise_batch, angle_batch = data
+
                 gt_train.extend(angle_batch.numpy())
-
-                clean_batch = clean_batch.numpy()
-                clean_batch = clean_batch * 255.
-                clean_batch = np.uint8(clean_batch) # Images need to be uint8 for cv2 when doing the augmentations
-                clean_batch = np.moveaxis(clean_batch, 1, -1)
-                
-                noise_batch = generate_augmentations_batch(clean_batch, self.train_dataset.get_curr_max())
-                
-                noise_batch = noise_batch / 255.
-                clean_batch = clean_batch / 255.
-
-                clean_batch = np.moveaxis(clean_batch, -1, 1)
-                noise_batch = torch.tensor(noise_batch, dtype=torch.float32)
-                clean_batch = torch.tensor(clean_batch, dtype=torch.float32)   
-                angle_batch = torch.unsqueeze(angle_batch, 1)     
+                angle_batch = torch.unsqueeze(angle_batch, 1)
 
                 noise_batch, clean_batch, angle_batch = noise_batch.to(self.device), clean_batch.to(self.device), angle_batch.to(self.device)
+                
                 # Passing it through model
                 z = self.encoder(noise_batch)
 
@@ -264,6 +270,7 @@ class PipelineJoint:
                 regr_loss = self.regr_loss(sa_batch, angle_batch) # Supervised loss
 
                 loss = (self.lambda1 * recon_loss) + (self.lambda2 * regr_loss) 
+                # loss = (self.lambda2 * regr_loss)
 
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -400,9 +407,12 @@ class PipelineJoint:
 
         with torch.no_grad():
             for bi, data in enumerate(val_dataloader):
-                clean_batch, angle_batch = data
-                gt_val.extend(angle_batch.numpy())
+                if not isinstance(self.train_dataset, TrainDriveDatasetPerturb):
+                    clean_batch, angle_batch = data
+                else:
+                    clean_batch, noise_batch, angle_batch = data
 
+                gt_val.extend(angle_batch.numpy())
                 angle_batch = torch.unsqueeze(angle_batch, 1)     
 
                 clean_batch, angle_batch = clean_batch.to(self.device), angle_batch.to(self.device)
@@ -417,6 +427,7 @@ class PipelineJoint:
                 regr_loss = self.regr_loss(sa_batch, angle_batch)
 
                 loss = (self.lambda1 * recon_loss)  + (self.lambda2 * regr_loss)
+                # loss = (self.lambda2 * regr_loss)
 
                 val_batch_loss += loss.item()
                 val_batch_recon_loss += (self.lambda1 * recon_loss.item())

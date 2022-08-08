@@ -183,6 +183,9 @@ def perturb_v_low(image, dist_ratio):
 def perturb_v_high(image, dist_ratio):
     return generate_HSV_image(image, 2, 5, dist_ratio)
 
+def clean(image, dist_ratio):
+    return np.moveaxis(image, -1, 0)
+
 def combine(img, dist_ratio):
     dist_ratio = dist_ratio / 2
 
@@ -204,19 +207,66 @@ def combine(img, dist_ratio):
 def generate_augmentations_batch(image_batch, curriculum_max):
     aug_imgs = []
 
+    '''
+        The following comment blocks should be commented and uncommented based on the test
+        you are performing. Even though these affects what single perturbations are seen
+        by the model during training, ALL of the single perturbations are still present
+        during testing.
+
+        However, b/c of the fact that not all single perturbations are seen during training,
+        performance of the different below cases should be compared using the performance of
+        Clean, Combined, and Unseen.
+    '''
+
+    # Original set of perturbations
     methods = [perturb_r_low, perturb_r_high, perturb_b_low, perturb_b_high, perturb_g_low, perturb_g_high, 
                 perturb_h_low, perturb_h_high, perturb_s_low, perturb_s_high, perturb_v_low, perturb_v_high,
                 perturb_blur, perturb_noise, perturb_distort]
 
+    # Only 9 perturbations where the direction of the single channel perturbations is chosen randomly
+    # methods = [perturb_r, perturb_b, perturb_g, perturb_h, perturb_s, perturb_v,
+    #             perturb_blur, perturb_noise, perturb_distort]
+    
+    # Remove HSV perturbations
+    # methods = [perturb_r_low, perturb_r_high, perturb_b_low, perturb_b_high, perturb_g_low, 
+    #             perturb_g_high, perturb_blur, perturb_noise, perturb_distort]
+    
+    # Remove RGB perturbations
+    # methods = [perturb_h_low, perturb_h_high, perturb_s_low, perturb_s_high, perturb_v_low, 
+    #             perturb_v_high, perturb_blur, perturb_noise, perturb_distort]
+
+    # Remove Blue, Noise, Distort
+    # methods = [perturb_r_low, perturb_r_high, perturb_b_low, perturb_b_high, perturb_g_low, 
+    #             perturb_g_high, perturb_h_low, perturb_h_high, perturb_s_low, perturb_s_high, 
+    #             perturb_v_low, perturb_v_high]
+
+    # Remove Blur and Distort perturbations
+    # methods = [perturb_r_low, perturb_r_high, perturb_b_low, perturb_b_high, perturb_g_low, 
+    #             perturb_g_high, perturb_h_low, perturb_h_high, perturb_s_low, perturb_s_high, 
+    #             perturb_v_low, perturb_v_high, perturb_noise ]
+
+    # Only RGB and Noise
+    # methods = [perturb_r_low, perturb_r_high, perturb_b_low, perturb_b_high, perturb_g_low, perturb_g_high, 
+    #             perturb_noise ]
+
+    # Only HSV and Noise
+    # methods = [perturb_h_low, perturb_h_high, perturb_s_low, perturb_s_high, perturb_v_low, perturb_v_high,
+    #             perturb_noise]
+
+
+    
     # Augmenting the images with single perturbations
     for i in range(len(image_batch)):
         image = image_batch[i]
-        curriculum_value = np.random.uniform(high=curriculum_max)
+        # intensity = np.random.uniform(high=curriculum_max)
+        
+        # Static Intensities 
+        intensity = random.choice([0.02, 0.2, 0.5, 0.65, 1.0])
 
         if i % len(methods) == 0:
             random.shuffle(methods)
     
-        aug_imgs.append(np.uint8(methods[i%len(methods)](image.copy(), curriculum_value)))
+        aug_imgs.append(np.uint8(methods[i%len(methods)](image.copy(), intensity)))
     
     aug_imgs = np.asarray(aug_imgs)
 
