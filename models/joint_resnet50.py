@@ -121,7 +121,7 @@ class EncoderRN50(nn.Module):
 
 class RegressorRN50(nn.Module):
     def __init__(self, layers, image_channels, num_classes, block=block):
-        super(RN50Head, self).__init__()
+        super(RegressorRN50, self).__init__()
         self.in_channels = 512
 
         self.fc = nn.Linear(512 * 4, num_classes)
