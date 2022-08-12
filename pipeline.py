@@ -138,8 +138,12 @@ class PipelineJoint:
             self.regr_loss = nn.L1Loss()
 
             self.params = list(self.encoder.parameters()) + list(self.regressor.parameters()) + list(self.decoder.parameters())
-            base_optim = torch.optim.Adam
-            self.optimizer = SAM(self.params, base_optimizer=base_optim, lr=self.lr)
+            ''' Use the below 2 lines to do SAM'''
+            # base_optim = torch.optim.Adam
+            # self.optimizer = SAM(self.params, base_optimizer=base_optim, lr=self.lr)
+
+            self.optimizer = torch.optim.Adam(self.params, lr=self.lr)
+
             self.load_epoch = 0
             self.best_loss = float('inf')
 
@@ -275,23 +279,30 @@ class PipelineJoint:
                 recon_loss = self.recon_loss(recon_batch, clean_batch)
                 regr_loss = self.regr_loss(sa_batch, angle_batch)
 
-                # 1st forward-backward pass for SAM
                 loss = (self.lambda1 * recon_loss) + (self.lambda2 * regr_loss) 
+
+                self.optimizer.zero_grad()
                 loss.backward()
-                self.optimizer.first_step(zero_grad=True)
+                self.optimizer.step()
 
-                # Start of 2nd forward-backward pass for SAM
-                z = self.encoder(noise_batch)
+                ''' Use this selection below to implement SAM in the training '''
+                # # 1st forward-backward pass for SAM
+                # loss = (self.lambda1 * recon_loss) + (self.lambda2 * regr_loss) 
+                # loss.backward()
+                # self.optimizer.first_step(zero_grad=True)
 
-                recon_batch = self.decoder(z)
-                sa_batch = self.regressor(z)
+                # # Start of 2nd forward-backward pass for SAM
+                # z = self.encoder(noise_batch)
 
-                recon_loss_2nd = self.recon_loss(recon_batch, clean_batch)
-                regr_loss_2nd = self.regr_loss(sa_batch, angle_batch)
+                # recon_batch = self.decoder(z)
+                # sa_batch = self.regressor(z)
 
-                # 2nd forward-backward pass for SAM
-                ((self.lambda1 * recon_loss_2nd) + (self.lambda2 * regr_loss_2nd)).backward()
-                self.optimizer.second_step(zero_grad=True)
+                # recon_loss_2nd = self.recon_loss(recon_batch, clean_batch)
+                # regr_loss_2nd = self.regr_loss(sa_batch, angle_batch)
+
+                # # 2nd forward-backward pass for SAM
+                # ((self.lambda1 * recon_loss_2nd) + (self.lambda2 * regr_loss_2nd)).backward()
+                # self.optimizer.second_step(zero_grad=True)
 
                 train_batch_loss += loss.item()
                 train_batch_recon_loss += (self.lambda1 * recon_loss.item())
