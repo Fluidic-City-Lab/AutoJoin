@@ -4,6 +4,7 @@ import random
 import os
 import csv
 from sklearn.model_selection import train_test_split
+from collections import OrderedDict
 
 import torch
 from torch import nn
@@ -66,34 +67,34 @@ class PipelineJoint:
 
             
             # This is for loading the data from image files (like png/jpg/etc.)
-            # label_path_train = os.path.join(self.args.data_dir, f"{self.args.dataset}", "labels_train.csv")
+            label_path_train = os.path.join(self.args.data_dir, f"{self.args.dataset}", "labels_train.csv")
 
-            # x = []
-            # y = []
+            x = []
+            y = []
 
-            # with open(label_path_train, 'r') as csvfile:
-            #     csvreader = csv.reader(csvfile)
+            with open(label_path_train, 'r') as csvfile:
+                csvreader = csv.reader(csvfile)
                 
-            #     for row in csvreader:
-            #         x.append(str(row[0][:-4]))
-            #         y.append(float(row[-1]))
+                for row in csvreader:
+                    x.append(str(row[0][:-4]))
+                    y.append(float(row[-1]))
         
-            # x = np.array(x)
-            # y = np.array(y)
+            x = np.array(x)
+            y = np.array(y)
 
-            # x_train, x_val, y_train, y_val = train_test_split(x, y, test_size=0.1, random_state=42)
+            x_train, x_val, y_train, y_val = train_test_split(x, y, test_size=0.1, random_state=42)
 
-            # self.train_dataset = TrainDriveDataset(args, x_train, y_train)
-            # self.val_dataset = TrainDriveDataset(args, x_val, y_val)
+            self.train_dataset = TrainDriveDataset(args, x_train, y_train)
+            self.val_dataset = TrainDriveDataset(args, x_val, y_val)
 
-            train = np.load(f"./data/{self.args.dataset}/train_{self.args.dataset}.npz")
-            val = np.load(f"./data/{self.args.dataset}/val_{self.args.dataset}.npz")
+            # train = np.load(f"./data/{self.args.dataset}/train_{self.args.dataset}.npz")
+            # val = np.load(f"./data/{self.args.dataset}/val_{self.args.dataset}.npz")
 
-            x_train, y_train = train["train_input_images"], train["train_target_angles"]
-            x_val, y_val = val["val_input_images"], val["val_target_angles"]
+            # x_train, y_train = train["train_input_images"], train["train_target_angles"]
+            # x_val, y_val = val["val_input_images"], val["val_target_angles"]
 
-            self.train_dataset = TrainDriveDatasetNP(args, x_train, y_train)
-            self.val_dataset = TrainDriveDatasetNP(args, x_val, y_val)
+            # self.train_dataset = TrainDriveDatasetNP(args, x_train, y_train)
+            # self.val_dataset = TrainDriveDatasetNP(args, x_val, y_val)
             
             self.train_dataloader = DataLoader(dataset=self.train_dataset,
                                                 batch_size=self.batch_size,
@@ -112,19 +113,23 @@ class PipelineJoint:
             
 
             if self.args.model == "resnet":
-                self.encoder = EncoderRN50([3, 4, 6, 3], 3, 1).to(self.device)
-                self.regressor = RegressorRN50([3, 4, 6, 3], 3, 1).to(self.device)
-                self.decoder = DecoderRN50().to(self.device)
+                self.encoder = EncoderRN50([3, 4, 6, 3], 3, 1)
+                self.regressor = RegressorRN50([3, 4, 6, 3], 3, 1)
+                self.decoder = DecoderRN50()
 
             elif self.args.model == "nvidia":                
-                self.encoder = EncoderNvidia().to(self.device)
-                self.regressor = RegressorNvidia().to(self.device)
-                self.decoder = DecoderNvidia().to(self.device)
+                self.encoder = EncoderNvidia()
+                self.regressor = RegressorNvidia()
+                self.decoder = DecoderNvidia()
             
             elif self.args.model == "vit":
-                self.encoder = EncoderViT(self.args).to(self.device)
-                self.regressor = RegressorViT().to(self.device)
-                self.decoder = DecoderViT(self.args).to(self.device)
+                self.encoder = EncoderViT(self.args)
+                self.regressor = RegressorViT()
+                self.decoder = DecoderViT(self.args)
+
+            self.encoder = nn.DataParallel(self.encoder).to(self.device)
+            self.regressor = nn.DataParallel(self.regressor).to(self.device)
+            self.decoder = nn.DataParallel(self.decoder).to(self.device)
 
             print(self.encoder)
             print(self.regressor)
@@ -167,8 +172,8 @@ class PipelineJoint:
                 self.val_recon_loss_collector = checkpoint["val_recon_loss_collector"]
                 self.val_reg_loss_collector = checkpoint["val_reg_loss_collector"]
             
-            self.train_dataset.set_curr_max(1)
-            self.val_dataset.set_curr_max(1)
+            # self.train_dataset.set_curr_max(1)
+            # self.val_dataset.set_curr_max(1)
 
         else:
             self.test_perturb = test_perturb
@@ -513,10 +518,27 @@ class PipelineJoint:
             encoder = EncoderViT(self.args).to(self.device)
             regressor = RegressorViT().to(self.device)
 
-        encoder.load_state_dict(torch.load('./results/trained_models/encoder.pth'))
+        # encoder = nn.DataParallel(encoder).to(self.device)
+        # regressor = nn.DataParallel(regressor).to(self.device)
+
+        enc_state_dict = torch.load('./results/trained_models/encoder.pth')
+        new_enc_state_dict = OrderedDict()
+        for k, v in enc_state_dict.items():
+            name = k[7:]
+            new_enc_state_dict[name] = v
+        encoder.load_state_dict(new_enc_state_dict)
+
+        # encoder.load_state_dict(torch.load('./results/trained_models/encoder.pth'))
         encoder.eval()
 
-        regressor.load_state_dict(torch.load('./results/trained_models/regressor.pth'))
+        reg_state_dict = torch.load('./results/trained_models/regressor.pth')
+        new_reg_state_dict = OrderedDict()
+        for k, v in reg_state_dict.items():
+            name = k[7:]
+            new_reg_state_dict[name] = v
+        regressor.load_state_dict(new_reg_state_dict)
+
+        # regressor.load_state_dict(torch.load('./results/trained_models/regressor.pth'))
         regressor.eval()
 
         print("Started Testing")
