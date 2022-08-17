@@ -152,7 +152,8 @@ class PipelineJoint:
                 self.encoder.load_state_dict(checkpoint["encoder_state_dict"])
                 self.decoder.load_state_dict(checkpoint["decoder_state_dict"])
                 self.regressor.load_state_dict(checkpoint["regressor_state_dict"])
-                self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+                self.optimizer_disc.load_state_dict(checkpoint["optimizer_disc_state_dict"])
+                self.optimizer_gen.load_state_dict(checkpoint["optimizer_gen_state_dict"])
 
                 self.train_dataset.set_curr_max(checkpoint["cv"])
                 self.val_dataset.set_curr_max(checkpoint["cv"])
@@ -343,7 +344,8 @@ class PipelineJoint:
                     "encoder_state_dict": self.encoder.state_dict(),
                     "decoder_state_dict": self.decoder.state_dict(),
                     "regressor_state_dict": self.regressor.state_dict(),
-                    "optimizer_state_dict": self.optimizer.state_dict(),
+                    "optimizer_disc_state_dict": self.optimizer_disc.state_dict(),
+                    "optimizer_gen_state_dict": self.optimizer_gen.state_dict(),
                     "load_epoch": ep+1,
                     "best_loss": self.best_loss,
                     "cv": self.train_dataset.get_curr_max(),
@@ -363,8 +365,8 @@ class PipelineJoint:
             torch.save({
                     "encoder_state_dict": self.encoder.state_dict(),
                     "decoder_state_dict": self.decoder.state_dict(),
-                    "regressor_state_dict": self.regressor.state_dict(),
-                    "optimizer_state_dict": self.optimizer.state_dict(),
+                    "optimizer_disc_state_dict": self.optimizer_disc.state_dict(),
+                    "optimizer_gen_state_dict": self.optimizer_gen.state_dict(),
                     "load_epoch": ep+1,
                     "best_loss": self.best_loss,
                     "cv": self.train_dataset.get_curr_max(),
