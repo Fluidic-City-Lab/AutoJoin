@@ -260,7 +260,7 @@ class PipelineJoint:
                 # Discriminator/Regressor Training 
                 self.optimizer_disc.zero_grad()
 
-                gan_label = torch.full((self.batch_size, ), self.real_label, dtype=torch.float, device=self.device)
+                gan_label = torch.full((angle_batch.shape[0], ), self.real_label, dtype=torch.float, device=self.device)
                 output_real = F.sigmoid(self.regressor(z_clean)).view(-1)
                 err_disc_real = self.gan_loss(output_real, gan_label)
                 err_disc_real.backward()
