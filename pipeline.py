@@ -133,8 +133,7 @@ class PipelineJoint:
             self.regr_loss = nn.L1Loss()
 
             self.params = list(self.encoder.parameters()) + list(self.regressor.parameters()) + list(self.decoder.parameters())
-            base_optim = torch.optim.Adam
-            self.optimizer = SAM(self.params, base_optimizer=base_optim, lr=self.lr)
+            self.optimizer = torch.optim.Adam(self.params, lr=self.lr)
             self.load_epoch = 0
             self.best_loss = float('inf')
 
@@ -166,9 +165,6 @@ class PipelineJoint:
                 self.val_loss_collector = checkpoint["val_loss_collector"]
                 self.val_recon_loss_collector = checkpoint["val_recon_loss_collector"]
                 self.val_reg_loss_collector = checkpoint["val_reg_loss_collector"]
-            
-            # self.train_dataset.set_curr_max(1)
-            # self.val_dataset.set_curr_max(1)
 
         else:
             self.test_perturb = test_perturb
@@ -270,23 +266,11 @@ class PipelineJoint:
                 recon_loss = self.recon_loss(recon_batch, clean_batch)
                 regr_loss = self.regr_loss(sa_batch, angle_batch)
 
-                # 1st forward-backward pass for SAM
                 loss = (self.lambda1 * recon_loss) + (self.lambda2 * regr_loss) 
+
+                self.optimizer.zero_grad()
                 loss.backward()
-                self.optimizer.first_step(zero_grad=True)
-
-                # Start of 2nd forward-backward pass for SAM
-                z = self.encoder(noise_batch)
-
-                recon_batch = self.decoder(z)
-                sa_batch = self.regressor(z)
-
-                recon_loss_2nd = self.recon_loss(recon_batch, clean_batch)
-                regr_loss_2nd = self.regr_loss(sa_batch, angle_batch)
-
-                # 2nd forward-backward pass for SAM
-                ((self.lambda1 * recon_loss_2nd) + (self.lambda2 * regr_loss_2nd)).backward()
-                self.optimizer.second_step(zero_grad=True)
+                self.optimizer.step()
 
                 train_batch_loss += loss.item()
                 train_batch_recon_loss += (self.lambda1 * recon_loss.item())
@@ -457,11 +441,8 @@ class PipelineJoint:
         return (avg_val_batch_loss, avg_val_batch_recon_loss, avg_val_batch_reg_loss, ma_val)
 
     def test_other(self):
-        # other_method = Nvidia().to(self.device)
-        # other_method.load_state_dict(torch.load('./saved_models/standard1.pth'))
-        # other_method.eval()
-
-        other_method = torch.load('./saved_models/shen1.pt')
+        other_method = Nvidia().to(self.device)
+        other_method.load_state_dict(torch.load('./saved_models/standard1.pth'))
         other_method.eval()
 
         print("Started Testing")
