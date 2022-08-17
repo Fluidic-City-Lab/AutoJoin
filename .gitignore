@@ -1,6 +1,10 @@
 data/sully/
 data/waymo/
+data/audi/
+data/honda/
 results/
 testing/
 testing_sully/
 testing_waymo/
+testing_honda/
+testing_audi/
