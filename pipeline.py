@@ -168,6 +168,9 @@ class PipelineJoint:
                 self.val_recon_loss_collector = checkpoint["val_recon_loss_collector"]
                 self.val_reg_loss_collector = checkpoint["val_reg_loss_collector"]
 
+            self.train_dataset.set_curr_max(1)
+            self.val_dataset.set_curr_max(1)
+
         else:
             self.test_perturb = test_perturb
             self.test_num = test_num
@@ -256,20 +259,22 @@ class PipelineJoint:
 
                 torch.autograd.set_detect_anomaly(True)
 
-                z_clean = self.encoder(clean_batch)
+                # z_clean = self.encoder(clean_batch)
+                z_noise = self.encoder(noise_batch)
 
                 # Discriminator/Regressor Training 
                 self.optimizer_disc.zero_grad()
 
                 gan_label = torch.full((angle_batch.shape[0], ), self.real_label, dtype=torch.float, device=self.device)
-                output_real = F.sigmoid(self.regressor(z_clean)).view(-1)
+                output_real = F.sigmoid(self.regressor(z_noise)).view(-1)
                 err_disc_real = self.gan_loss(output_real, gan_label)
-                err_disc_real.backward()
+                err_disc_real.backward(retain_graph=True)
 
                 with torch.no_grad():
-                    z_noise = self.encoder(noise_batch)
+                    # z_noise = self.encoder(noise_batch)
+                    z_clean = self.encoder(clean_batch)
 
-                fake_images = self.decoder(z_noise)
+                fake_images = self.decoder(z_clean)
                 gan_label.fill_(self.fake_label)
                 output_fake = F.sigmoid(self.regressor(self.encoder(fake_images.detach()))).view(-1)
                 err_disc_fake = self.gan_loss(output_fake, gan_label)
