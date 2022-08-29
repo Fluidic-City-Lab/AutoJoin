@@ -165,6 +165,9 @@ class PipelineJoint:
                 self.val_loss_collector = checkpoint["val_loss_collector"]
                 self.val_recon_loss_collector = checkpoint["val_recon_loss_collector"]
                 self.val_reg_loss_collector = checkpoint["val_reg_loss_collector"]
+            
+            self.train_dataset.set_curr_max(0.0)
+            self.val_dataset.set_curr_max(0.0)
 
         else:
             self.test_perturb = test_perturb
