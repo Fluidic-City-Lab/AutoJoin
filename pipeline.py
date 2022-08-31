@@ -112,6 +112,8 @@ class PipelineJoint:
             elif self.args.model == "nvidia":                
                 self.encoder = EncoderNvidia().to(self.device)
                 self.regressor = RegressorNvidia().to(self.device)
+                self.encoder_disc = EncoderNvidia().to(self.device)
+                self.regressor_disc = RegressorNvidia().to(self.device)
                 self.decoder = DecoderNvidia(self.args).to(self.device)
             
             elif self.args.model == "vit":
@@ -127,10 +129,12 @@ class PipelineJoint:
             self.gan_loss = nn.BCELoss()
         
             # self.params = list(self.encoder.parameters()) + list(self.regressor.parameters()) + list(self.decoder.parameters())
-            self.disc = list(self.encoder.parameters()) + list(self.regressor.parameters())
-            self.gen = list(self.decoder.parameters())
-            self.optimizer_disc = torch.optim.Adam(self.disc, lr=self.lr)
-            self.optimizer_gen = torch.optim.Adam(self.gen, lr=self.lr)
+            self.regr_params = list(self.encoder.parameters()) + list(self.regressor.parameters())
+            self.disc_params = list(self.encoder_disc.parameters()) + list(self.regressor_disc.parameters())
+            self.gen_params = list(self.encoder.parameters()) + list(self.decoder.parameters())
+            self.optimizer_regr = torch.optim.Adam(self.regr_params, lr=self.lr)
+            self.optimizer_disc = torch.optim.Adam(self.disc_params, lr=self.lr)
+            self.optimizer_gen = torch.optim.Adam(self.gen_params, lr=self.lr)
             
             self.real_label = 1
             self.fake_label = 0
@@ -139,12 +143,13 @@ class PipelineJoint:
             self.best_loss = float('inf')
 
             self.train_loss_collector = np.zeros(self.train_epochs)
-            self.train_recon_loss_collector = np.zeros(self.train_epochs)
-            self.train_reg_loss_collector = np.zeros(self.train_epochs)
+            self.train_disc_loss_collector = np.zeros(self.train_epochs)
+            self.train_gen_loss_collector = np.zeros(self.train_epochs)
+            self.train_disc_clean_loss_collector = np.zeros(self.train_epochs)
+            self.train_disc_gen_loss_collector = np.zeros(self.train_epochs)
+            self.train_disc_regr_loss_collector = np.zeros(self.train_epochs)
 
             self.val_loss_collector = np.zeros(self.train_epochs)
-            self.val_recon_loss_collector = np.zeros(self.train_epochs)
-            self.val_reg_loss_collector = np.zeros(self.train_epochs)
 
             if self.args.load == "true":
                 checkpoint = torch.load(f'{self.args.logs_dir}/{self.args.checkpoints_dir}/checkpoint.pt')
@@ -161,12 +166,13 @@ class PipelineJoint:
                 self.best_loss = checkpoint["best_loss"]
 
                 self.train_loss_collector = checkpoint["train_loss_collector"]
-                self.train_recon_loss_collector = checkpoint["train_recon_loss_collector"]
-                self.train_reg_loss_collector = checkpoint["train_reg_loss_collector"]
+                self.train_disc_loss_collector = checkpoint["train_disc_loss_collector"]
+                self.train_gen_loss_collector = checkpoint["train_gen_loss_collector"]
+                self.train_disc_clean_loss_collector = checkpoint["train_disc_clean_loss_collector"]
+                self.train_disc_gen_loss_collector = checkpoint["train_disc_gen_loss_collector"]
+                self.train_disc_regr_loss_collector = checkpoint["train_disc_regr_loss_collector"]
 
                 self.val_loss_collector = checkpoint["val_loss_collector"]
-                self.val_recon_loss_collector = checkpoint["val_recon_loss_collector"]
-                self.val_reg_loss_collector = checkpoint["val_reg_loss_collector"]
 
             self.train_dataset.set_curr_max(1)
             self.val_dataset.set_curr_max(1)
@@ -228,9 +234,12 @@ class PipelineJoint:
 
             start_time = time.time()
 
-            train_batch_loss = 0
-            train_batch_recon_loss = 0
-            train_batch_reg_loss = 0
+            train_batch_loss = 0.
+            train_batch_disc_loss = 0.
+            train_batch_gen_loss = 0.
+            train_batch_disc_clean_loss = 0.
+            train_batch_disc_gen_loss = 0.
+            train_batch_disc_regr_loss = 0.
 
             # Below two arrays are used for calculing Mean Accuracy during training
             gt_train = [] 
@@ -253,74 +262,89 @@ class PipelineJoint:
                 clean_batch = np.moveaxis(clean_batch, -1, 1)
                 noise_batch = torch.tensor(noise_batch, dtype=torch.float32)
                 clean_batch = torch.tensor(clean_batch, dtype=torch.float32)   
-                angle_batch = torch.unsqueeze(angle_batch, 1)     
 
                 noise_batch, clean_batch, angle_batch = noise_batch.to(self.device), clean_batch.to(self.device), angle_batch.to(self.device)
 
                 torch.autograd.set_detect_anomaly(True)
 
-                # z_clean = self.encoder(clean_batch)
-                z_noise = self.encoder(noise_batch)
-
-                # Discriminator/Regressor Training 
+                # Discriminator Training 
                 self.optimizer_disc.zero_grad()
 
+                # Passing the clean images (or real images) through the discriminator
                 gan_label = torch.full((angle_batch.shape[0], ), self.real_label, dtype=torch.float, device=self.device)
-                output_real = F.sigmoid(self.regressor(z_noise)).view(-1)
-                err_disc_real = self.gan_loss(output_real, gan_label)
-                err_disc_real.backward(retain_graph=True)
+                disc_output_clean = torch.squeeze(torch.sigmoid(self.regressor_disc(self.encoder_disc(clean_batch))))
+                err_disc_clean = self.gan_loss(disc_output_clean, gan_label)
+                err_disc_clean.backward()
 
-                with torch.no_grad():
-                    # z_noise = self.encoder(noise_batch)
-                    z_clean = self.encoder(clean_batch)
+                # Generating images using the noisy images and then passing those through the
+                # discriminator with fake labels
+                gen_fake_images = self.decoder(self.encoder(noise_batch))
 
-                fake_images = self.decoder(z_clean)
+                if ep in [0, 20, 50, 200, 400]:
+                    if bi == 0:
+                        for i in range(len(gen_fake_images)):
+                            print(gen_fake_images[i])
+                            gen_fake_img = gen_fake_images[i] * 255.
+                            img_i = Image.fromarray(np.uint8(np.moveaxis(gen_fake_img.cpu().detach().clone().numpy(), 0, -1))).convert('RGB')
+                            img_i.save(f"./sample_images/generated_img_{ep}_{bi}_{i}.png")
+
                 gan_label.fill_(self.fake_label)
-                output_fake = F.sigmoid(self.regressor(self.encoder(fake_images.detach()))).view(-1)
-                err_disc_fake = self.gan_loss(output_fake, gan_label)
-                err_disc_fake.backward()
-
-                sa_batch = self.regressor(z_noise)
-                regr_loss = self.lambda2 * self.regr_loss(sa_batch, angle_batch)
-                regr_loss.backward()
-
-                self.optimizer_disc.step()
+                output_disc_fake = torch.squeeze(torch.sigmoid(self.regressor_disc(self.encoder_disc(gen_fake_images.detach()))))
+                err_disc_gen = self.gan_loss(output_disc_fake, gan_label)
+                err_disc_gen.backward()
                 
-                # Generator/Decoder Training
+                recon_loss = self.recon_loss(gen_fake_images, clean_batch)
+                recon_loss.backward(retain_graph=True)
+
+                # Generator Training
                 self.optimizer_gen.zero_grad()
 
                 gan_label.fill_(self.real_label)
-                output_fake = F.sigmoid(self.regressor(self.encoder(fake_images))).view(-1)
-                err_gen = self.gan_loss(output_fake, gan_label)
+                output_gen_fake = torch.squeeze(torch.sigmoid(self.regressor(self.encoder(gen_fake_images))))
+                err_gen = self.gan_loss(output_gen_fake, gan_label)
                 err_gen.backward()
 
-                self.optimizer_gen.step()
+                # Regressor Training
+                sa_batch = torch.squeeze(self.regressor(self.encoder(noise_batch)))
+                regr_loss = self.lambda2 * self.regr_loss(sa_batch, angle_batch)
+                regr_loss.backward()
 
+                self.optimizer_gen.step()
+                self.optimizer_disc.step()
+                self.optimizer_regr.step()
+                
                 # Logging the loss
-                train_batch_loss += (err_disc_real.item() + err_disc_fake.item() + regr_loss.item() + err_gen.item())
-                train_batch_recon_loss += (err_disc_real.item() + err_disc_fake.item() + err_gen.item())
-                train_batch_reg_loss += (regr_loss.item())
+                train_batch_loss += (err_disc_clean.item() + err_disc_gen.item() + regr_loss.item() + err_gen.item())
+                train_batch_disc_loss += (err_disc_clean.item() + err_disc_gen.item() + regr_loss.item())
+                train_batch_gen_loss += (err_gen.item())
+                train_batch_disc_clean_loss += (err_disc_clean.item())
+                train_batch_disc_gen_loss += (err_disc_gen.item())
+                train_batch_disc_regr_loss += (regr_loss.item())
 
                 preds_train.extend(sa_batch.cpu().detach().numpy())
             
             avg_train_batch_loss = round(train_batch_loss / len(self.train_dataloader), 3)
-            avg_train_batch_recon_loss = round(train_batch_recon_loss / len(self.train_dataloader), 3)
-            avg_train_batch_reg_loss = round(train_batch_reg_loss / len(self.train_dataloader), 3)
+            avg_train_batch_disc_loss = round(train_batch_disc_loss / len(self.train_dataloader), 3)
+            avg_train_batch_gen_loss = round(train_batch_gen_loss / len(self.train_dataloader), 3)
+            avg_train_batch_disc_clean_loss = round(train_batch_disc_clean_loss / len(self.train_dataloader), 3)
+            avg_train_batch_disc_gen_loss = round(train_batch_disc_gen_loss / len(self.train_dataloader), 3)
+            avg_train_batch_disc_regr_loss = round(train_batch_disc_regr_loss / len(self.train_dataloader), 3)
 
             ma_train = ma(preds_train, gt_train)
 
             val_tuple = self.validate(self.val_dataloader)
             avg_val_batch_loss = val_tuple[0]
-            ma_val = val_tuple[3]
+            ma_val = val_tuple[1]
 
             # Saving epoch train and val loss to their respective collectors
             self.train_loss_collector[ep] = avg_train_batch_loss
-            self.train_recon_loss_collector[ep] = avg_train_batch_recon_loss
-            self.train_reg_loss_collector[ep] = avg_train_batch_reg_loss
+            self.train_disc_loss_collector[ep] = avg_train_batch_disc_loss
+            self.train_gen_loss_collector[ep] = avg_train_batch_gen_loss
+            self.train_disc_clean_loss_collector[ep] = avg_train_batch_disc_clean_loss
+            self.train_disc_gen_loss_collector[ep] = avg_train_batch_disc_gen_loss
+            self.train_disc_regr_loss_collector[ep] = avg_train_batch_disc_regr_loss
 
             self.val_loss_collector[ep] = avg_val_batch_loss
-            self.val_recon_loss_collector[ep] = val_tuple[1]
-            self.val_reg_loss_collector[ep] = val_tuple[2]
 
             end_time = time.time()
             epoch_time = end_time - start_time
@@ -355,11 +379,12 @@ class PipelineJoint:
                     "best_loss": self.best_loss,
                     "cv": self.train_dataset.get_curr_max(),
                     "train_loss_collector": self.train_loss_collector,
-                    "train_recon_loss_collector": self.train_recon_loss_collector,
-                    "train_reg_loss_collector": self.train_reg_loss_collector,
+                    "train_disc_loss_collector": self.train_disc_loss_collector,
+                    "train_gen_loss_collector": self.train_gen_loss_collector,
+                    "train_disc_clean_loss_collector": self.train_disc_clean_loss_collector,
+                    "train_disc_gen_loss_collector": self.train_disc_gen_loss_collector,
+                    "train_disc_regr_loss_collector": self.train_disc_regr_loss_collector,
                     "val_loss_collector": self.val_loss_collector,
-                    "val_recon_loss_collector": self.val_recon_loss_collector,
-                    "val_reg_loss_collector": self.val_reg_loss_collector
                 }, f'{self.args.logs_dir}/{self.args.checkpoints_dir}/checkpoint_best_loss.pt')
 
                 if self.train_dataset.get_curr_max() < 0.99:
@@ -376,11 +401,12 @@ class PipelineJoint:
                     "best_loss": self.best_loss,
                     "cv": self.train_dataset.get_curr_max(),
                     "train_loss_collector": self.train_loss_collector,
-                    "train_recon_loss_collector": self.train_recon_loss_collector,
-                    "train_reg_loss_collector": self.train_reg_loss_collector,
+                    "train_disc_loss_collector": self.train_disc_loss_collector,
+                    "train_gen_loss_collector": self.train_gen_loss_collector,
+                    "train_disc_clean_loss_collector": self.train_disc_clean_loss_collector,
+                    "train_disc_gen_loss_collector": self.train_disc_gen_loss_collector,
+                    "train_disc_regr_loss_collector": self.train_disc_regr_loss_collector,
                     "val_loss_collector": self.val_loss_collector,
-                    "val_recon_loss_collector": self.val_recon_loss_collector,
-                    "val_reg_loss_collector": self.val_reg_loss_collector
                 }, f'{self.args.logs_dir}/{self.args.checkpoints_dir}/checkpoint.pt')
  
         print("\nFinished Training!\n")
@@ -398,8 +424,8 @@ class PipelineJoint:
         fig, ax = plt.subplots(figsize=(16,5), dpi=200)
         xticks= np.arange(0,self.train_epochs,5)
         ax.set_ylabel("Avg. Loss") 
-        ax.plot(np.array(self.train_recon_loss_collector))
-        ax.plot(np.array(self.val_recon_loss_collector))
+        ax.plot(np.array(self.train_disc_loss_collector))
+        ax.plot(np.array(self.val_loss_collector))
         ax.set_xticks(xticks) 
         ax.legend(["Training (MSE)", "Validation (MSE)"])
         fig.savefig(f'{self.args.logs_dir}/training_graph_recon.png')
@@ -407,8 +433,8 @@ class PipelineJoint:
         fig, ax = plt.subplots(figsize=(16,5), dpi=200)
         xticks= np.arange(0,self.train_epochs,5)
         ax.set_ylabel("Avg. Loss") 
-        ax.plot(np.array(self.train_reg_loss_collector))
-        ax.plot(np.array(self.val_reg_loss_collector))
+        ax.plot(np.array(self.train_gen_loss_collector))
+        ax.plot(np.array(self.val_loss_collector))
         ax.set_xticks(xticks) 
         ax.legend(["Training (MSE)", "Validation (MSE)"])
         fig.savefig(f'{self.args.logs_dir}/training_graph_reg.png')
@@ -438,29 +464,19 @@ class PipelineJoint:
 
                 # Passing it through model
                 z = self.encoder(clean_batch)
-
-                # recon_batch = self.decoder(z)
                 sa_batch = self.regressor(z)
                 
-                # recon_loss = self.recon_loss(recon_batch, clean_batch)
                 regr_loss = self.regr_loss(sa_batch, angle_batch)
-
                 loss = (self.lambda2 * regr_loss)
 
                 val_batch_loss += loss.item()
-                val_batch_recon_loss += 0 # (self.lambda1 * recon_loss.item())
-                val_batch_reg_loss += (self.lambda2 * regr_loss.item())
 
                 preds_val.extend(sa_batch.cpu().detach().numpy())
 
-        
         avg_val_batch_loss = round(val_batch_loss / len(val_dataloader), 3)
-        avg_val_batch_recon_loss = round(val_batch_recon_loss / len(val_dataloader), 3)
-        avg_val_batch_reg_loss = round(val_batch_reg_loss / len(val_dataloader), 3)
-
         ma_val = ma(preds_val, gt_val)
 
-        return (avg_val_batch_loss, avg_val_batch_recon_loss, avg_val_batch_reg_loss, ma_val)
+        return (avg_val_batch_loss, ma_val)
 
     def test_other(self):
         # other_method = Nvidia().to(self.device)
