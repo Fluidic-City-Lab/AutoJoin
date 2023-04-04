@@ -1,20 +1,20 @@
 # AutoJoin
 
-This GitHub is the official PyTorch implementation of the technique: AutoJoin
+This GitHub is the official PyTorch implementation of the robustness technique: AutoJoin
 
 ## Data
 
-All data used is publicly available; however, a GDrive link has been provided to all of the data necessary for training and evaluating on the Sully and Waymo datasets. 
+All data used is publicly available; however, a GDrive link has been provided to all of the data necessary for training and evaluating on the SullyChen and A2D2 datasets. If you would like the data in a ready for training/testing form for Honda and/or Waymo, please feel free to email me, and I will provide the necessary links for those datasets as well.
 
-Sully:
-https://drive.google.com/file/d/1JYDZ0szXORLlMM8B17kwJg2OyyqqLiZm/view?usp=sharing
+SullyChen:
+https://drive.google.com/file/d/1V9S2rWtUXY9dJgYQOnaNx39mjG5jtknG/view?usp=share_link
 
-Waymo:
-https://drive.google.com/file/d/1HrSmX-0Xa73iCMaMYqVcMd0Tdk_rvFxz/view?usp=sharing
+A2D2:
+https://drive.google.com/file/d/1XlZjB208f_8a97jxY5Qv_ZBl9ipPKTZv/view?usp=share_link
 
 Should these links expire, then create an issue or send an email, and I will fix it.
 
-After downloading the data, unzip it, and place it into the data folder. That should be it for the data.
+After downloading the data, unzip it, and place it into the data folder. That's all that is necessary for the data.
 
 
 ## Training
@@ -25,7 +25,7 @@ python3 main.py --dataset sully --model nvidia --train_epochs 500 --seed 34222 -
 ```
 Will start the training using the Nvidia architecture, on the Sully dataset, for 500 epochs with a batch_size of 128. There are more settings that can be played around with as well.
 
-The above command can be swapped out to train on the ResNet50 architecture by swapping out --model nvidia for --model resnet. Only the RN50 architecture was evaluated for this paper, although the other ResNet architectures could be swapped in.
+The above command can be swapped out to train on the ResNet50 architecture by swapping out --model nvidia for --model resnet. Only the RN50 architecture was evaluated for this paper, although the other ResNet architectures could be swapped in with additional code.
 
 If on the vit-sam branch, a command like:
 ```
