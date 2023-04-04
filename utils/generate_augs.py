@@ -204,6 +204,19 @@ def combine(img, dist_ratio):
 
     return img
 
+def generate_random_image(img, curriculum_max):
+
+    # Original set of perturbations
+    methods = [perturb_r_low, perturb_r_high, perturb_b_low, perturb_b_high, perturb_g_low, perturb_g_high, 
+                perturb_h_low, perturb_h_high, perturb_s_low, perturb_s_high, perturb_v_low, perturb_v_high,
+                perturb_blur, perturb_noise, perturb_distort]
+
+    intensity = np.random.uniform(low=0.0, high=curriculum_max) # random intensity
+    aug_img = np.uint8(methods[np.random.randint(0, high=len(methods))](img.copy(), intensity)) # choosing a random perturbation
+
+    return aug_img
+
+
 def generate_augmentations_batch(image_batch, curriculum_max):
     aug_imgs = []
 
@@ -253,7 +266,11 @@ def generate_augmentations_batch(image_batch, curriculum_max):
     # methods = [perturb_h_low, perturb_h_high, perturb_s_low, perturb_s_high, perturb_v_low, perturb_v_high,
     #             perturb_noise]
 
+    # Only RGB
+    # methods = [perturb_r_low, perturb_r_high, perturb_b_low, perturb_b_high, perturb_g_low, perturb_g_high]
 
+    # Only HSV 
+    # methods = [perturb_h_low, perturb_h_high, perturb_s_low, perturb_s_high, perturb_v_low, perturb_v_high]
     
     # Augmenting the images with single perturbations
     for i in range(len(image_batch)):

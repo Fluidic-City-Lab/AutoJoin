@@ -2,7 +2,7 @@ from tqdm import tqdm
 import argparse
 
 from pipeline import PipelineJoint
-from utils.stats_utils_joint import calc_comparison_baseline, calc_avg_categories, generate_average_file
+from utils.stats_utils_joint import calc_comparison_baseline, calc_avg_categories, generate_average_file, basic_stats
 
 from models.joint_nvidia import EncoderNvidia, DecoderNvidia, RegressorNvidia
 from models.nvidia_advbn import HeadNvidia, FeatureXNvidia, NvidiaAdvBN
@@ -96,6 +96,22 @@ def main(args):
             pl = PipelineJoint(args, "test", aug_list[i], i)
             pl.test_other()
 
+    if args.run_mode == "sanity_check":
+
+        # Doing n number of random restarts
+        for i in tqdm(range(100)):
+            print(f"Random Restart: {i+1}")
+
+            pl = PipelineJoint(args, "test", "random")
+            pl.test_our_approach()
+        
+        aug_techs = ["ours"]
+        metrics = ["ma", "mae", "rmse"]
+
+        for i in range(len(aug_techs)):
+            for j in range(len(metrics)):
+                basic_stats(f'./results/results_{aug_techs[i]}1_{metrics[j]}.txt', metrics[j])
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -111,9 +127,9 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", default="sully")
     parser.add_argument("--model", default="nvidia")
     parser.add_argument("--load", default="false")
-    parser.add_argument("--run_mode", default="train", choices=["train", "test_autojoin", "test_others"])
+    parser.add_argument("--run_mode", default="train", choices=["train", "test_autojoin", "test_others", "sanity_check"])
     parser.add_argument("--img_dim", type=int, default=None)
-    parser.add_argument("--lambda1", type=int, default=1)
-    parser.add_argument("--lambda2", type=int, default=10)
+    parser.add_argument("--lambda1", type=int, default=10)
+    parser.add_argument("--lambda2", type=int, default=1)
 
     main(parser.parse_args())

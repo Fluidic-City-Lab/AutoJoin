@@ -351,4 +351,21 @@ def calc_comparison_adversarial(results_robust1, results_robust2, results_standa
 
         for i in range(len(robust1_advex_preds_pgd)):
             f.write(f"{levels[i]}\t{robust_advex_pgd_avgs[i]}\t{robust_recon_pgd_avgs[i]}\t{robust_pgd_diffs[i]}\t{standard_advex_pgd_avgs[i]}\t{standard_recon_pgd_avgs[i]}\t{standard_pgd_diffs[i]}\n")
-        
+
+def basic_stats(results_file, metric):
+    results = []
+
+    with open(results_file, 'r') as f:
+        for line in f:
+            line = line.strip()
+            data = line.split(',')
+
+            results.append(float(data[1]))
+    
+    avg = np.mean(results)
+    min_value = np.min(results)
+    max_value = np.max(results)
+
+    print(f"Average {metric}: {avg}")
+    print(f"Minimum {metric}: {min_value}")
+    print(f"Maximum {metric}: {max_value}\n")

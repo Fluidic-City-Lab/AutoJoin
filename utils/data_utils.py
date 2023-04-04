@@ -8,7 +8,7 @@ import random
 import torchvision.transforms as T
 
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from utils.generate_augs import generate_RGB_image, generate_HSV_image, generate_distort_image, generate_blur_image, generate_noise_image
+from utils.generate_augs import generate_RGB_image, generate_HSV_image, generate_distort_image, generate_blur_image, generate_noise_image, generate_random_image
 
 class TrainDriveDataset(Dataset):
     def __init__(self, args, x, y):
@@ -273,6 +273,9 @@ class TestDriveDataset(Dataset):
     
     def perturb(self, x):
         def get_aug_method(test_perturb):
+            if test_perturb == "random":
+                return "random", 0
+
             word_array = test_perturb.split('_')
             aug_method = ""
 
@@ -396,6 +399,9 @@ class TestDriveDataset(Dataset):
         if test_perturb_name == "distort":
             noise_image = generate_distort_image(x, distort_levels[test_level])
 
+        if test_perturb_name == "random":
+            noise_image = generate_random_image(x, 1) # the 2nd value being passed is different from above methods as its curr max
+
         return noise_image
 
     def __len__(self):
@@ -404,19 +410,38 @@ class TestDriveDataset(Dataset):
     def __getitem__(self, key):
         label = self.y[key]
 
-        if self.test_num < 1: # Clean 
-            img_path = f'{self.args.data_dir}/{self.args.dataset}/test/clean/{self.x[key]}' + ".jpg"
-        
-            if not os.path.isfile(img_path):
-                print(img_path, " not exists")
+        if self.test_perturb != "random":
+            if self.test_num < 1: # Clean 
+                img_path = f'{self.args.data_dir}/{self.args.dataset}/test/clean/{self.x[key]}' + ".jpg"
+            
+                if not os.path.isfile(img_path):
+                    print(img_path, " not exists")
 
-            img = Image.open(img_path)
-            # img = img.convert("RGB")
-            # img = np.moveaxis(np.asarray(img), -1, 0)
+                img = Image.open(img_path)
+                # img = img.convert("RGB")
+                # img = np.moveaxis(np.asarray(img), -1, 0)
 
-        elif self.test_num < 76: # Single Perturbation
+            elif self.test_num < 76: # Single Perturbation
+                img_path = f'{self.args.data_dir}/{self.args.dataset}/test/clean/{self.x[key]}' + ".jpg"
+            
+                if not os.path.isfile(img_path):
+                    print(img_path, " not exists")
+
+                img = Image.open(img_path)
+                img = np.asarray(img).copy()
+                img = self.perturb(img)
+                img = np.moveaxis(img, 0, -1) 
+                img = Image.fromarray(np.uint8(img), "RGB")
+                
+            else: # Combined and Unseen
+                img_path = f'{self.args.data_dir}/{self.args.dataset}/test/{self.test_perturb}/{self.x[key]}' + ".jpg"
+
+                img = Image.open(img_path)
+                # img = np.moveaxis(np.asarray(img), -1, 0)
+
+        else: # This else is just for applying random perturbations to the images to do a sanity check
             img_path = f'{self.args.data_dir}/{self.args.dataset}/test/clean/{self.x[key]}' + ".jpg"
-        
+            
             if not os.path.isfile(img_path):
                 print(img_path, " not exists")
 
@@ -425,12 +450,6 @@ class TestDriveDataset(Dataset):
             img = self.perturb(img)
             img = np.moveaxis(img, 0, -1) 
             img = Image.fromarray(np.uint8(img), "RGB")
-            
-        else: # Combined and Unseen
-            img_path = f'{self.args.data_dir}/{self.args.dataset}/test/{self.test_perturb}/{self.x[key]}' + ".jpg"
-
-            img = Image.open(img_path)
-            # img = np.moveaxis(np.asarray(img), -1, 0)
         
         if self.args.img_dim:
             img = img.resize((self.args.img_dim, self.args.img_dim))

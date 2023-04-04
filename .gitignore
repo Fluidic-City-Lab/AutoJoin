@@ -13,3 +13,12 @@ __pycache__/
 __pycache__/*
 
 sample_images/
+
+./Shen_Finetuning/
+./Shen_Training/
+Shen_Finetuning/
+Shen_Training/
+Regressor/
+/Regressor/
+./Regressor/
+./Regressor/*

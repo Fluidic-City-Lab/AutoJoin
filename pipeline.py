@@ -173,6 +173,9 @@ class PipelineJoint:
             self.test_perturb = test_perturb
             self.test_num = test_num
 
+            # if self.test_perturb == "random":
+            #     np.random.seed()
+
             # if test_num < 75: # This corresponds to the single perturbations where we just want to load the clean dataset
             #     self.test_inputs, self.test_targets, self.test_angles = prepare_data_test(self.args.data_dir, "clean")
             #     self.test_dataset = TestDriveDataset(self.test_inputs, self.test_targets, self.test_angles)
