@@ -53,7 +53,7 @@ class block(nn.Module):
         return x
 
 class EncoderRN50(nn.Module):
-    def __init__(self, layers, image_channels, num_classes, block=block):
+    def __init__(self, layers, image_channels, num_classes=1, block=block):
         super(EncoderRN50, self).__init__()
         self.in_channels = 64
         self.conv1 = nn.Conv2d(image_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
@@ -120,7 +120,7 @@ class EncoderRN50(nn.Module):
         return nn.Sequential(*layers)
 
 class RegressorRN50(nn.Module):
-    def __init__(self, layers, image_channels, num_classes, block=block):
+    def __init__(self, layers, image_channels, num_classes=1, block=block):
         super(RegressorRN50, self).__init__()
         self.in_channels = 512
 

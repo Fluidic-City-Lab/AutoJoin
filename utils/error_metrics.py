@@ -39,6 +39,22 @@ def ma(predictions, targets, check=False):
 
         return mean_acc 
 
+def acc(predictions, targets):
+    predictions, targets = np.asarray(predictions), np.asarray(targets)
+
+    count = 0
+
+    for i, data in enumerate(predictions):
+        pred = np.argmax(data)
+
+        if pred == targets[i]:
+            count+=1
+    
+    acc = count / predictions.shape[0]
+
+    return acc
+     
+
 
 def mape(predictions, targets):
     return np.mean(np.abs((targets - predictions)/targets))*100

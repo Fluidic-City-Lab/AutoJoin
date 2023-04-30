@@ -6,21 +6,24 @@ import csv
 from sklearn.model_selection import train_test_split
 
 import torch
+import torchvision
 from torch import nn
 from torch.utils.data import DataLoader
+import torchvision.transforms as transforms
 
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import numpy as np
-from models.joint_vit import DecoderViT, EncoderViT, RegressorViT
 
-from utils.data_utils import TrainDriveDataset, TrainDriveDatasetNP, TestDriveDataset, TrainDriveDatasetPerturb
+from utils.data_utils import TrainDriveDataset, ClassifyDataset,TestDriveDataset, TrainDriveDatasetPerturb
 from utils.generate_augs import generate_augmentations_batch
-from utils.error_metrics import mae, ma, rmse
+from utils.error_metrics import mae, ma, rmse, acc
 from utils.sam import SAM
 
-from models.joint_resnet50 import EncoderRN50, DecoderRN50, RegressorRN50
 from models.joint_nvidia import EncoderNvidia, DecoderNvidia, RegressorNvidia
+from models.joint_resnet50 import EncoderRN50, DecoderRN50, RegressorRN50
+from models.joint_vit import DecoderViT, EncoderViT, RegressorViT
+
 from models.nvidia import Nvidia
 from models.resnet50 import ResNet50
 from vit_pytorch import ViT
@@ -65,61 +68,67 @@ class PipelineJoint:
             print(f"Training Epochs: {self.train_epochs}\n")
 
             
-            # This is for loading the data from image files (like png/jpg/etc.)
-            label_path_train = os.path.join(self.args.data_dir, f"{self.args.dataset}", "labels_train.csv")
+            if self.args.dataset_type == "driving":
+                # This is for loading the data from image files (like png/jpg/etc.)
+                label_path_train = os.path.join(self.args.data_dir, f"{self.args.dataset}", "labels_train.csv")
 
-            x = []
-            y = []
+                x = []
+                y = []
 
-            with open(label_path_train, 'r') as csvfile:
-                csvreader = csv.reader(csvfile)
+                with open(label_path_train, 'r') as csvfile:
+                    csvreader = csv.reader(csvfile)
+                    
+                    for row in csvreader:
+                        x.append(str(row[0][:-4]))
+                        y.append(float(row[-1]))
+            
+                x = np.array(x)
+                y = np.array(y)
+
+                x_train, x_val, y_train, y_val = train_test_split(x, y, test_size=0.1, random_state=42)
+
+                self.train_dataset = TrainDriveDataset(args, x_train, y_train)
+                self.val_dataset = TrainDriveDataset(args, x_val, y_val)
                 
-                for row in csvreader:
-                    x.append(str(row[0][:-4]))
-                    y.append(float(row[-1]))
+                self.train_dataloader = DataLoader(dataset=self.train_dataset,
+                                                    batch_size=self.batch_size,
+                                                    shuffle=True,
+                                                    collate_fn=None,
+                                                    num_workers=8,
+                                                    prefetch_factor=8)
+
+                self.val_dataloader = DataLoader(dataset=self.val_dataset,
+                                                    batch_size=self.batch_size,
+                                                    shuffle=True,
+                                                    collate_fn=None,
+                                                    num_workers=8,
+                                                    prefetch_factor=8)
+            
+            elif self.args.dataset_type == "cifar10":
         
-            x = np.array(x)
-            y = np.array(y)
+                self.train_dataset = torchvision.datasets.CIFAR10(root='./data', train=True,
+                                                        download=True, transform=transforms.ToTensor())
+                
+                self.train_dataset, self.val_dataset = torch.utils.data.random_split(self.train_dataset, [0.9, 0.1])
 
-            x_train, x_val, y_train, y_val = train_test_split(x, y, test_size=0.1, random_state=42)
+                self.train_dataset = ClassifyDataset(self.train_dataset)
+                self.val_dataset = ClassifyDataset(self.val_dataset)
 
-            self.train_dataset = TrainDriveDataset(args, x_train, y_train)
-            self.val_dataset = TrainDriveDataset(args, x_val, y_val)
+                self.train_dataloader = torch.utils.data.DataLoader(self.train_dataset, batch_size=self.batch_size,
+                                                        shuffle=True, num_workers=8)
+                
+                self.val_dataloader = torch.utils.data.DataLoader(self.val_dataset, batch_size=self.batch_size,
+                                                        shuffle=True, num_workers=8)        
 
-            # train = np.load(f"./data/{self.args.dataset}/train_{self.args.dataset}.npz")
-            # val = np.load(f"./data/{self.args.dataset}/val_{self.args.dataset}.npz")
-
-            # x_train, y_train = train["train_input_images"], train["train_target_angles"]
-            # x_val, y_val = val["val_input_images"], val["val_target_angles"]
-
-            # self.train_dataset = TrainDriveDatasetNP(args, x_train, y_train)
-            # self.val_dataset = TrainDriveDatasetNP(args, x_val, y_val)
-            
-            self.train_dataloader = DataLoader(dataset=self.train_dataset,
-                                                batch_size=self.batch_size,
-                                                shuffle=True,
-                                                collate_fn=None,
-                                                num_workers=8,
-                                                prefetch_factor=8)
-
-            self.val_dataloader = DataLoader(dataset=self.val_dataset,
-                                                batch_size=self.batch_size,
-                                                shuffle=True,
-                                                collate_fn=None,
-                                                num_workers=8,
-                                                prefetch_factor=8)
-            
-            
-
-            if self.args.model == "resnet":
-                self.encoder = EncoderRN50([3, 4, 6, 3], 3, 1).to(self.device)
-                self.regressor = RegressorRN50([3, 4, 6, 3], 3, 1).to(self.device)
+            if self.args.model == "resnet50":
+                self.encoder = EncoderRN50([3, 4, 6, 3], 3, self.args.num_classes).to(self.device)
+                self.regressor = RegressorRN50([3, 4, 6, 3], 3, self.args.num_classes).to(self.device)
                 self.decoder = DecoderRN50().to(self.device)
 
             elif self.args.model == "nvidia":                
-                self.encoder = EncoderNvidia().to(self.device)
-                self.regressor = RegressorNvidia().to(self.device)
-                self.decoder = DecoderNvidia().to(self.device)
+                self.encoder = EncoderNvidia(self.args.num_classes).to(self.device)
+                self.regressor = RegressorNvidia(self.args.num_classes).to(self.device)
+                self.decoder = DecoderNvidia(num_classes=self.args.num_classes).to(self.device)
             
             elif self.args.model == "vit":
                 self.encoder = EncoderViT(self.args).to(self.device)
@@ -128,9 +137,14 @@ class PipelineJoint:
 
             print(self.encoder)
             print(self.regressor)
+            print(self.decoder)
 
             self.recon_loss = nn.MSELoss()
-            self.regr_loss = nn.L1Loss()
+
+            if self.args.num_classes == 1:
+                self.regr_loss = nn.L1Loss()
+            elif self.args.num_classes == 10:
+                self.regr_loss = nn.CrossEntropyLoss()
 
             self.params = list(self.encoder.parameters()) + list(self.regressor.parameters()) + list(self.decoder.parameters())
             self.optimizer = torch.optim.Adam(self.params, lr=self.lr)
@@ -144,6 +158,9 @@ class PipelineJoint:
             self.val_loss_collector = np.zeros(self.train_epochs)
             self.val_recon_loss_collector = np.zeros(self.train_epochs)
             self.val_reg_loss_collector = np.zeros(self.train_epochs)
+
+            self.train_dataset.set_curr_max(0.0)
+            self.val_dataset.set_curr_max(0.0)
 
             if self.args.load == "true":
                 checkpoint = torch.load(f'{self.args.logs_dir}/{self.args.checkpoints_dir}/checkpoint.pt')
@@ -166,8 +183,6 @@ class PipelineJoint:
                 self.val_recon_loss_collector = checkpoint["val_recon_loss_collector"]
                 self.val_reg_loss_collector = checkpoint["val_reg_loss_collector"]
             
-            self.train_dataset.set_curr_max(0.0)
-            self.val_dataset.set_curr_max(0.0)
 
         else:
             self.test_perturb = test_perturb
@@ -183,27 +198,36 @@ class PipelineJoint:
             #     self.test_inputs, self.test_targets, self.test_angles = prepare_data_test(self.args.data_dir, aug_method)
             #     self.test_dataset = TestDriveDataset(self.test_inputs, self.test_targets, self.test_angles)
 
-            # This is for loading the data from image files (like png/jpg/etc.)
-            label_path_test = os.path.join(self.args.data_dir, f"{self.args.dataset}", "labels_test.csv")
+            if self.args.dataset_type == "driving":
+                # This is for loading the data from image files (like png/jpg/etc.)
+                label_path_test = os.path.join(self.args.data_dir, f"{self.args.dataset}", "labels_test.csv")
 
-            x_test = []
-            y_test = []
+                x_test = []
+                y_test = []
 
-            with open(label_path_test, 'r') as csvfile:
-                csvreader = csv.reader(csvfile)
+                with open(label_path_test, 'r') as csvfile:
+                    csvreader = csv.reader(csvfile)
+                    
+                    for row in csvreader:
+                        x_test.append(str(row[0][:-4]))
+                        y_test.append(float(row[-1]))
+            
+                x_test = np.array(x_test)
+                y_test = np.array(y_test)
+
+                self.test_dataset = TestDriveDataset(self.args, x_test, y_test, self.test_perturb, self.test_num)
+
+                self.test_dataloader = DataLoader(dataset=self.test_dataset, 
+                                                    batch_size=1, 
+                                                    shuffle=False)
+            
+            elif self.args.dataset_type == "cifar10":
+                self.test_dataset = torchvision.datasets.CIFAR10(root='./data', train=False,
+                                                    download=True, transform=transforms.ToTensor())
                 
-                for row in csvreader:
-                    x_test.append(str(row[0][:-4]))
-                    y_test.append(float(row[-1]))
-        
-            x_test = np.array(x_test)
-            y_test = np.array(y_test)
-
-            self.test_dataset = TestDriveDataset(self.args, x_test, y_test, self.test_perturb, self.test_num)
-
-            self.test_dataloader = DataLoader(dataset=self.test_dataset, 
-                                                batch_size=1, 
-                                                shuffle=False)
+                self.test_dataloader = torch.utils.data.DataLoader(self.test_dataset, 
+                                                                    batch_size=1,
+                                                                    shuffle=False)
 
     # Function that trains the model while validating the model at the same time
     def train(self):
@@ -239,7 +263,7 @@ class PipelineJoint:
 
             for bi, data in enumerate(tqdm(self.train_dataloader)):
                 if not isinstance(self.train_dataset, TrainDriveDatasetPerturb):
-                    clean_batch, angle_batch = data
+                    clean_batch, labels = data
 
                     clean_batch = clean_batch.numpy()
                     clean_batch = clean_batch * 255.
@@ -256,12 +280,14 @@ class PipelineJoint:
                     clean_batch = torch.tensor(clean_batch, dtype=torch.float32)   
 
                 else:
-                    clean_batch, noise_batch, angle_batch = data
+                    clean_batch, noise_batch, labels = data
 
-                gt_train.extend(angle_batch.numpy())
-                angle_batch = torch.unsqueeze(angle_batch, 1)
+                gt_train.extend(labels.numpy())
 
-                noise_batch, clean_batch, angle_batch = noise_batch.to(self.device), clean_batch.to(self.device), angle_batch.to(self.device)
+                if self.args.num_classes == 1:
+                    labels = torch.unsqueeze(labels, 1)                    
+
+                noise_batch, clean_batch, labels = noise_batch.to(self.device), clean_batch.to(self.device), labels.to(self.device)
 
                 # Passing it through model
                 z = self.encoder(noise_batch)
@@ -270,7 +296,7 @@ class PipelineJoint:
                 sa_batch = self.regressor(z)
 
                 recon_loss = self.recon_loss(recon_batch, clean_batch)
-                regr_loss = self.regr_loss(sa_batch, angle_batch)
+                regr_loss = self.regr_loss(sa_batch, labels)
 
                 loss = (self.lambda1 * recon_loss) + (self.lambda2 * regr_loss) 
 
@@ -288,7 +314,10 @@ class PipelineJoint:
             avg_train_batch_recon_loss = round(train_batch_recon_loss / len(self.train_dataloader), 3)
             avg_train_batch_reg_loss = round(train_batch_reg_loss / len(self.train_dataloader), 3)
 
-            ma_train = ma(preds_train, gt_train)
+            if self.args.num_classes == 1:
+                ma_train = ma(preds_train, gt_train)
+            elif self.args.num_classes == 10:
+                ma_train = acc(preds_train, gt_train)
 
             val_tuple = self.validate(self.val_dataloader)
             avg_val_batch_loss = val_tuple[0]
@@ -410,14 +439,16 @@ class PipelineJoint:
         with torch.no_grad():
             for bi, data in enumerate(val_dataloader):
                 if not isinstance(self.train_dataset, TrainDriveDatasetPerturb):
-                    clean_batch, angle_batch = data
+                    clean_batch, labels = data
                 else:
-                    clean_batch, noise_batch, angle_batch = data
+                    clean_batch, noise_batch, labels = data
 
-                gt_val.extend(angle_batch.numpy())
-                angle_batch = torch.unsqueeze(angle_batch, 1)     
+                gt_val.extend(labels.numpy())
 
-                clean_batch, angle_batch = clean_batch.to(self.device), angle_batch.to(self.device)
+                if self.args.num_classes == 1:
+                    labels = torch.unsqueeze(labels, 1)     
+
+                clean_batch, labels = clean_batch.to(self.device), labels.to(self.device)
 
                 # Passing it through model
                 z = self.encoder(clean_batch)
@@ -426,7 +457,7 @@ class PipelineJoint:
                 sa_batch = self.regressor(z)
                 
                 recon_loss = self.recon_loss(recon_batch, clean_batch)
-                regr_loss = self.regr_loss(sa_batch, angle_batch)
+                regr_loss = self.regr_loss(sa_batch, labels)
 
                 loss = (self.lambda1 * recon_loss)  + (self.lambda2 * regr_loss)
                 # loss = (self.lambda2 * regr_loss)
@@ -442,7 +473,10 @@ class PipelineJoint:
         avg_val_batch_recon_loss = round(val_batch_recon_loss / len(val_dataloader), 3)
         avg_val_batch_reg_loss = round(val_batch_reg_loss / len(val_dataloader), 3)
 
-        ma_val = ma(preds_val, gt_val)
+        if self.args.num_classes == 1:
+            ma_val = ma(preds_val, gt_val)
+        elif self.args.num_classes == 10:
+            ma_val = acc(preds_val, gt_val)
 
         return (avg_val_batch_loss, avg_val_batch_recon_loss, avg_val_batch_reg_loss, ma_val)
 
@@ -458,13 +492,13 @@ class PipelineJoint:
 
         with torch.no_grad():
             for batch, data in enumerate(tqdm(self.test_dataloader)):
-                img_batch, angle_batch = data
-                img_batch, angle_batch = img_batch.to(self.device), angle_batch.to(self.device)
+                img_batch, labels = data
+                img_batch, labels = img_batch.to(self.device), labels.to(self.device)
     
                 output, _ = other_method(img_batch)
                 preds_test.append(np.squeeze(output.cpu().detach().clone().numpy()))
 
-                gt_test.append(np.squeeze(angle_batch.cpu().detach().clone().numpy()))
+                gt_test.append(np.squeeze(labels.cpu().detach().clone().numpy()))
         
         print("\nFinished Testing")
 
@@ -513,13 +547,13 @@ class PipelineJoint:
 
         with torch.no_grad():
             for batch, data in enumerate(tqdm(self.test_dataloader)):
-                img_batch, angle_batch = data
-                img_batch, angle_batch = img_batch.to(self.device), angle_batch.to(self.device)
+                img_batch, labels = data
+                img_batch, labels = img_batch.to(self.device), labels.to(self.device)
 
                 output = torch.squeeze(regressor(encoder(img_batch)))
             
                 preds_test.append(output.cpu().detach().clone().numpy())
-                gt_test.append(np.squeeze(angle_batch.cpu().detach().clone().numpy()))
+                gt_test.append(np.squeeze(labels.cpu().detach().clone().numpy()))
 
                 # fig, ax = plt.subplots(3,1, figsize=(8,8), dpi=100)
                 # ax[0].imshow(Image.fromarray(np.uint8(np.moveaxis(clean_batch_np, 0, -1))).convert('RGB'))

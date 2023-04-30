@@ -115,7 +115,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--batch_size", type=int, default=64, help="Size of training batch")
+    parser.add_argument("--batch_size", type=int, default=128, help="Size of training batch")
     parser.add_argument("--lr", default=1e-4, help="Learning rate")
     parser.add_argument("--data_dir", default="data/", help="Data directory")
     parser.add_argument("--logs_dir", default="results")
@@ -124,8 +124,10 @@ if __name__ == "__main__":
     parser.add_argument("--train_epochs", type=int,  default=500, help="Number of training epochs")
     # parser.add_argument("--model_dir", default='./saved_models/autoencoder.pt', help="Path to saved models")
     parser.add_argument("--seed", type=int, default=18474, help="Seed for the project")
-    parser.add_argument("--dataset", default="sully")
-    parser.add_argument("--model", default="nvidia")
+    parser.add_argument("--dataset_type", default="driving", choices=["driving", "cifar10"])
+    parser.add_argument("--dataset", default="sully", choices=["sully", "audi", "honda", "waymo"])
+    parser.add_argument("--model", default="nvidia", choices=["nvidia", "resnet50", "vit"])
+    parser.add_argument("--num_classes", type=int, default=1)
     parser.add_argument("--load", default="false")
     parser.add_argument("--run_mode", default="train", choices=["train", "test_autojoin", "test_others", "sanity_check"])
     parser.add_argument("--img_dim", type=int, default=None)

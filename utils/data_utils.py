@@ -5,7 +5,7 @@ import os
 from PIL import Image
 import cv2
 import random
-import torchvision.transforms as T
+import torchvision.transforms as transforms
 
 from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from utils.generate_augs import generate_RGB_image, generate_HSV_image, generate_distort_image, generate_blur_image, generate_noise_image, generate_random_image
@@ -19,16 +19,16 @@ class TrainDriveDataset(Dataset):
 
         if self.args.img_dim:
             img_dim = int(args.img_dim)
-            self.transform = T.Compose(
-                [T.Resize((img_dim,img_dim)) ,
-                T.ToTensor()]
+            self.transform = transforms.Compose(
+                [transforms.Resize((img_dim,img_dim)) ,
+                transforms.ToTensor()]
             )
         else:
-            self.transform = T.Compose(
-                [T.ToTensor()]
+            self.transform = transforms.Compose(
+                [transforms.ToTensor()]
             )
 
-        self.curriculum_max = 0
+        self.curriculum_max = 0.
 
     def __len__(self):
         return len(self.y)
@@ -57,6 +57,26 @@ class TrainDriveDataset(Dataset):
     def set_curr_max(self, cv):
         self.curriculum_max = cv
 
+class ClassifyDataset(Dataset):
+    def __init__(self, dataset):
+        self.dataset = dataset
+
+        self.curriculum_max = 0.
+    
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, key):
+        return self.dataset[key]
+
+    def increase_curr_max(self):
+        self.curriculum_max += 0.1
+    
+    def get_curr_max(self):
+        return self.curriculum_max
+    
+    def set_curr_max(self, cv):
+        self.curriculum_max = cv
 
 class TrainDriveDatasetNP(Dataset):
     def __init__(self, args, x, y):
@@ -67,13 +87,13 @@ class TrainDriveDatasetNP(Dataset):
 
         if self.args.img_dim:
             img_dim = int(args.img_dim)
-            self.transform = T.Compose(
-                [T.Resize((img_dim,img_dim)) ,
-                T.ToTensor()]
+            self.transform = transforms.Compose(
+                [transforms.Resize((img_dim,img_dim)) ,
+                transforms.ToTensor()]
             )
         else:
-            self.transform = T.Compose(
-                [T.ToTensor()]
+            self.transform = transforms.Compose(
+                [transforms.ToTensor()]
             )
 
         self.curriculum_max = 0
@@ -111,13 +131,13 @@ class TrainDriveDatasetPerturb(Dataset):
 
         if self.args.img_dim:
             img_dim = int(args.img_dim)
-            self.transform = T.Compose(
-                [T.Resize((img_dim,img_dim)) ,
-                T.ToTensor()]
+            self.transform = transforms.Compose(
+                [transforms.Resize((img_dim,img_dim)) ,
+                transforms.ToTensor()]
             )
         else:
-            self.transform = T.Compose(
-                [T.ToTensor()]
+            self.transform = transforms.Compose(
+                [transforms.ToTensor()]
             )
 
         self.curriculum_max = 0
@@ -207,7 +227,7 @@ class TrainDriveDatasetPerturb(Dataset):
     def perturb_brightness(self, img):
         img = Image.fromarray(img).convert("RGB")
 
-        brightness = T.ColorJitter(brightness=(0,1),
+        brightness = transforms.ColorJitter(brightness=(0,1),
                                     contrast=(0,0),
                                     saturation=(0,0),
                                     hue=(0,0))
@@ -220,7 +240,7 @@ class TrainDriveDatasetPerturb(Dataset):
     def perturb_contrast(self, img):
         img = Image.fromarray(img).convert("RGB")
 
-        contrast = T.ColorJitter(brightness=(0,0),
+        contrast = transforms.ColorJitter(brightness=(0,0),
                                     contrast=(0,1),
                                     saturation=(0,0),
                                     hue=(0,0))
@@ -233,7 +253,7 @@ class TrainDriveDatasetPerturb(Dataset):
     def perturb_saturation(self, img):
         img = Image.fromarray(img).convert("RGB")
 
-        saturation = T.ColorJitter(brightness=(0,0),
+        saturation = transforms.ColorJitter(brightness=(0,0),
                                     contrast=(0,0),
                                     saturation=(0,1),
                                     hue=(0,0))
@@ -246,7 +266,7 @@ class TrainDriveDatasetPerturb(Dataset):
     def perturb_hue(self, img):
         img = Image.fromarray(img).convert("RGB")
 
-        hue = T.ColorJitter(brightness=(0,0),
+        hue = transforms.ColorJitter(brightness=(0,0),
                             contrast=(0,0),
                             saturation=(0,0),
                             hue=(-0.5, 0.5))
@@ -265,8 +285,8 @@ class TestDriveDataset(Dataset):
         self.test_perturb = test_perturb
         self.test_num = test_num
 
-        self.transform = T.Compose(
-                [T.ToTensor()]
+        self.transform = transforms.Compose(
+                [transforms.ToTensor()]
             )
 
         assert (len(self.x) == len(self.y))
