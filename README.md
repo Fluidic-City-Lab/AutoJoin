@@ -4,17 +4,9 @@ This GitHub is the official PyTorch implementation of the robustness technique: 
 
 ## Data
 
-All data used is publicly available; however, a GDrive link has been provided to all of the data necessary for training and evaluating on the SullyChen and A2D2 datasets. If you would like the data in a ready for training/testing form for Honda and/or Waymo, please feel free to email me, and I will provide the necessary links for those datasets as well.
+All data used is publicly available; however, if you would like the data in a ready for training/testing form, please feel free to reach out to me.
 
-SullyChen:
-https://drive.google.com/file/d/1V9S2rWtUXY9dJgYQOnaNx39mjG5jtknG/view?usp=share_link
-
-A2D2:
-https://drive.google.com/file/d/1XlZjB208f_8a97jxY5Qv_ZBl9ipPKTZv/view?usp=share_link
-
-Should these links expire, then create an issue or send an email, and I will fix it.
-
-After downloading the data, unzip it, and place it into the data folder. That's all that is necessary for the data.
+After downloading the data, unzip it, and place it into the data folder.
 
 
 ## Training
