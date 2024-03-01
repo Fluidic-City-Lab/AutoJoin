@@ -6,11 +6,17 @@ This GitHub is the official PyTorch implementation of the robustness technique: 
 The [Appendix.pdf](https://github.com/tmvllrrl/AutoJoin/blob/main/Appendix.pdf) file contains 9 pages of appendix with following sections:
 
   I. DATASETS AND EXPERIMENT SETUP
+  
   II. MAXIMUM AND MINIMUM INTENSITY
+  
   III. FEEDBACK LOOP
+  
   IV. FULL SET OF PERTURBATIONS NOT GUARANTEED AND NO RANDOM INTENSITIES
+  
   V. PERTURBATION STUDY
+  
   VI. TIMES FOR EXPERIMENTS
+  
   VI. GRADIENT-BASED ADVERSARIAL TRANSFERABILITY
 
 ## Data
